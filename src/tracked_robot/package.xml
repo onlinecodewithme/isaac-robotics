@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>tracked_robot</name>
+  <version>0.1.0</version>
+  <description>
+    ROS2 package for an autonomous tracked robot with mapping, navigation and auto-docking capabilities
+    using NVIDIA Isaac ROS Perceptor and ZED 2i camera
+  </description>
+  <maintainer email="user@example.com">Isaac Xavier</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <!-- ROS2 Core -->
+  <depend>rclcpp</depend>
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+  
+  <!-- Robot -->
+  <depend>robot_state_publisher</depend>
+  <depend>joint_state_publisher</depend>
+  <depend>xacro</depend>
+  <depend>urdf</depend>
+  
+  <!-- Navigation -->
+  <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>nav2_common</exec_depend>
+  <exec_depend>nav2_costmap_2d</exec_depend>
+  <exec_depend>nav2_core</exec_depend>
+  <exec_depend>nav2_behavior_tree</exec_depend>
+  <exec_depend>nav2_msgs</exec_depend>
+  <exec_depend>nav2_util</exec_depend>
+  
+  <!-- SLAM -->
+  <exec_depend>slam_toolbox</exec_depend>
+  
+  <!-- ZED Camera - optional dependencies -->
+  <exec_depend>zed_wrapper</exec_depend>
+  <exec_depend>zed_components</exec_depend>
+  
+  <!-- NVIDIA Isaac ROS - optional dependencies -->
+  <exec_depend>isaac_ros_visual_slam</exec_depend>
+  <exec_depend>isaac_ros_nova</exec_depend>
+
+  <!-- System Dependencies that need to be installed -->
+  <exec_depend>python3-odrive</exec_depend>
+  <exec_depend>ros-humble-slam-toolbox</exec_depend>
+  <exec_depend>ros-humble-navigation2</exec_depend>
+  <exec_depend>ros-humble-nav2-bringup</exec_depend>
+  <exec_depend>ros-humble-rviz2</exec_depend>
+  
+  <!-- Custom Messages -->
+  <depend>tracked_robot_msgs</depend>
+  
+  <!-- ODrive Motor Controller -->
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-odrive</exec_depend>
+  <exec_depend>python3-fibre</exec_depend>
+
+  <!-- Testing -->
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -1,0 +1,9 @@
+# Goal
+---
+# Result
+bool success      # Whether the docking was successful
+string message    # Informational message about the result
+---
+# Feedback
+string current_state   # Current state of the docking process
+float32 distance_to_dock  # Current distance to the dock

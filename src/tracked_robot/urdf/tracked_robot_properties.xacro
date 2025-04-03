@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Robot dimensions - matches the spec in task (780x1015x720 mm - W,L,H) -->
+  <xacro:property name="chassis_width" value="0.78" />   <!-- 780mm -->
+  <xacro:property name="chassis_length" value="1.015" /> <!-- 1015mm -->
+  <xacro:property name="chassis_height" value="0.72" />  <!-- 720mm -->
+  <xacro:property name="chassis_mass" value="60.0" />    <!-- Approximate mass in kg -->
+  
+  <!-- Track dimensions -->
+  <xacro:property name="track_width" value="0.15" />     <!-- Each track is 15cm wide -->
+  <xacro:property name="track_length" value="${chassis_length}" />
+  <xacro:property name="track_thickness" value="0.05" /> <!-- 5cm thick track -->
+  <xacro:property name="track_mass" value="8.0" />       <!-- Each track mass in kg -->
+  
+  <!-- Wheel dimensions -->
+  <xacro:property name="wheel_radius" value="0.15" />    <!-- 30cm diameter wheels -->
+  <xacro:property name="wheel_width" value="${track_width}" />
+  <xacro:property name="wheel_mass" value="4.0" />       <!-- Each wheel mass in kg -->
+  
+  <!-- Motor properties for ODrive BLDC motors (1kW each) -->
+  <xacro:property name="motor_mass" value="2.5" />       <!-- Each motor mass in kg -->
+  <xacro:property name="motor_radius" value="0.06" />    <!-- Motor radius -->
+  <xacro:property name="motor_length" value="0.12" />    <!-- Motor length -->
+  
+  <!-- Ground clearance -->
+  <xacro:property name="ground_clearance" value="0.05" /> <!-- 5cm ground clearance -->
+  
+  <!-- ZED 2i camera dimensions -->
+  <xacro:property name="zed_width" value="0.175" />      <!-- 175mm -->
+  <xacro:property name="zed_height" value="0.033" />     <!-- 33mm -->
+  <xacro:property name="zed_depth" value="0.03" />       <!-- 30mm -->
+  <xacro:property name="zed_mass" value="0.124" />       <!-- 124g -->
+  
+  <!-- Inertia macro -->
+  <xacro:macro name="box_inertia" params="m x y z">
+    <inertia 
+      ixx="${m*(y*y+z*z)/12}" ixy="0" ixz="0"
+      iyy="${m*(x*x+z*z)/12}" iyz="0"
+      izz="${m*(x*x+y*y)/12}" />
+  </xacro:macro>
+  
+  <xacro:macro name="cylinder_inertia" params="m r h">
+    <inertia 
+      ixx="${m*(3*r*r+h*h)/12}" ixy="0" ixz="0"
+      iyy="${m*(3*r*r+h*h)/12}" iyz="0" 
+      izz="${m*r*r/2}" />
+  </xacro:macro>
+
+</robot>

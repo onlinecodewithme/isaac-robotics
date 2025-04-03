@@ -1,0 +1,125 @@
+/**
+ * ZED 2i camera configuration file for tracked_robot
+ * This is a YAML-formatted file for the ZED ROS wrapper
+ */
+
+zed_node:
+  ros__parameters:
+    # Camera configuration
+    camera_model: 'zed2i'
+    camera_name: 'zed2i'
+    
+    # General configuration
+    general:
+      resolution: 2                         # 0: HD2K, 1: HD1080, 2: HD720, 3: VGA
+      grab_frame_rate: 30                   # Camera FPS
+      gpu_id: 0                             # GPU device to use for depth sensing
+      sdk_verbose: 1                        # SDK verbose level
+      self_calib: true                      # Enable self calibration
+      extended_mode: false                  # Use the extended depth range mode
+      right_depth_enable: false             # Calculate depth for the right image
+      flip_image: false                     # Mirror and flip the image horizontally
+      depth_stabilization: 1                # Depth stabilization
+      confidence_threshold: 50              # Depth confidence threshold (%)
+      sensing_mode: 1                       # 0: STANDARD, 1: FILL (default)
+      measure3D_reference_frame: 1          # 0: CAMERA, 1: MAP (default)
+      use_cpu_for_depth_computation: false  # If resources are limited, offload to CPU
+      maximum_distance: 20.0                # Maximum depth for the point cloud
+
+    # Position tracking and mapping
+    pos_tracking:
+      area_memory_db_path: ''               # Path to the Area Memory database
+      area_memory: true                     # Enable/disable Area Memory
+      spatial_memory_dir: './'              # Directory where the spatial memory logs are stored
+      spatial_memory_save: true             # Save area memory graph into file
+      spatial_memory_export: true           # Export submaps at closing time
+      init_odom_with_first_valid_pose: true # Initialize odometry with first valid pose
+      floor_alignment: true                 # Enable/disable floor alignment
+      gravity_as_origin: true               # Set gravity as origin (world frame Z axis points upward)
+      pose_smoothing: false                 # Smooth pose during IMU integration
+      two_d_mode: false                     # Force 2D mode (display only X, Y position and heading)
+      mapping_enabled: true                 # Enable/disable mapping
+      mapping_resolution: 0.05              # Spatial mapping resolution (0.05m = 5cm)
+      mesh_min_threshold: 1.0               # Minimum confidence value for a voxel to be included in the mesh [1-100]
+      enable_imu_fusion: true               # Use IMU data in tracking
+      fix_z_in_2d_mode: true                # Fix Z to zero when two_d_mode is enabled
+      publish_pose_covariance: true         # Publish the odometry covariance matrix
+
+    # Camera settings
+    video:
+      rgb_exposure: 50                     # RGB exposure (0, 100)
+      rgb_gain: 50                         # RGB gain (0, 100) 
+      rgb_contrast: 4                      # RGB contrast (0, 8)
+      rgb_brightness: 4                    # RGB brightness (0, 8)
+      rgb_hue: 0                           # RGB hue (-180, 180)
+      rgb_saturation: 4                    # RGB saturation (0, 8)
+      white_balance_temperature_auto: true # Auto white balance
+      white_balance_temperature: 42         # White balance temperature (2800, 13000) in K
+      ai_confidence: 50                     # Minimum confidence for AI detections
+
+    # Depth settings
+    depth:
+      quality: 3                            # Depth quality (1: PERFORMANCE, 2: MEDIUM, 3: QUALITY, 4: ULTRA)
+      confidence_threshold: 50              # Confidence threshold for depth map %
+      depth_filtering: 2                    # Depth filtering mode - 0: NONE, 1: SOFT, 2: MEDIUM, 3: HARD
+      depth_texture_conf: 100               # Depth texture confidence threshold %
+      max_depth: 20.0                       # Maximum depth (meters)
+      filter_min_depth: 0.0                 # Minimum depth after filtering (meters)
+      filter_max_depth: 15.0                # Maximum depth after filtering (meters)
+      enable_depth_stabilization: true      # Use depth stabilization
+      openni_depth_mode: false              # OpenNI compatibility mode for depth
+      enable_color_map: true                # Depth is colorized
+      
+    # Point cloud settings
+    point_cloud:
+      enable: true                          # Enable point cloud generation
+      max_range: 15.0                       # Maximum distance for point cloud (meters)
+      resolution: 1                         # Point cloud resolution: 0: FULL, 1: HIGH, 2: MEDIUM, 3: LOW
+      filter_intensity: 1.0                 # Filter intensity [0,1]
+      filter_remove_duplicates: false       # Filter duplicated points
+      filter_remove_saturated: true         # Filter saturated points
+      filter_remove_invalid: true           # Filter invalid points
+      frame_id: 'map'                       # Default: map
+      downsampling_factor: 1                # Downsampling factor
+      point_size: 2.0                       # Point size in pixels for visualization
+
+    # Object detection settings
+    object_detection:
+      od_enabled: true                      # Enable object detection
+      od_model: 3                           # Detection model precision: 0: MULTI_CLASS_BOX, 1: MULTI_CLASS_BOX_ACCURATE, 2: HUMAN_BODY_FAST, 3: HUMAN_BODY_ACCURATE, 4: HUMAN_BODY_38_KEYPOINTS
+      od_detection_model: "MULTI_CLASS_BOX_FAST"  # Detection model
+      od_allow_reduced_precision_inference: true  # Allow inference to run at a lower precision to improve runtime
+      od_max_range: 15.0                    # Detection maximum range
+      od_image_sync: true                   # Synchronize detections with images
+      od_confidence_threshold: 40.0         # Detection confidence threshold
+      od_tracking: true                     # Object tracking
+      od_mc_people: true                    # Detect people
+      od_mc_vehicles: true                  # Detect vehicles
+      od_mc_bag: true                       # Detect bags
+      od_mc_animal: true                    # Detect animals
+      od_mc_electronics: true               # Detect electronics
+      od_mc_fruit_vegetable: true           # Detect fruits and vegetables
+      od_mc_sport: true                     # Detect sports-related objects
+
+    # ROS/ROS2 settings
+    ros:
+      publish_mapped_point_cloud: true
+      publish_point_cloud: true
+      publish_depth_image: true
+      publish_stereo_images: true
+      publish_rgb_image: true
+      
+      # TF frames
+      camera_frame: 'zed2i_camera_center'
+      odom_frame: 'odom'
+      base_frame: 'base_link'
+      map_frame: 'map'
+      depth_frame: 'zed2i_left_camera_optical_frame'
+      rgb_frame: 'zed2i_left_camera_optical_frame'
+      point_cloud_frame: 'map'
+      
+      # QoS settings
+      qos_history: 1                       # 1: KEEP_LAST, 2: KEEP_ALL
+      qos_depth: 1                         # Queue size
+      qos_reliability: 1                   # 1: RELIABLE, 2: BEST_EFFORT
+      qos_durability: 2                    # 1: TRANSIENT_LOCAL, 2: VOLATILE

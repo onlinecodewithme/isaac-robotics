@@ -1,0 +1,282 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Gazebo plugins for simulation -->
+  <xacro:macro name="gazebo_plugins">
+    <!-- Gazebo plugin for ROS control -->
+    <gazebo>
+      <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
+        <robotNamespace>/tracked_robot</robotNamespace>
+        <robotSimType>gazebo_ros_control/DefaultRobotHWSim</robotSimType>
+        <legacyModeNS>true</legacyModeNS>
+      </plugin>
+    </gazebo>
+
+    <!-- Chassis -->
+    <gazebo reference="chassis_link">
+      <material>Gazebo/DarkGrey</material>
+      <turnGravityOff>false</turnGravityOff>
+    </gazebo>
+
+    <!-- Left track -->
+    <gazebo reference="left_track_link">
+      <material>Gazebo/Black</material>
+      <turnGravityOff>false</turnGravityOff>
+      <mu1>0.9</mu1>
+      <mu2>0.9</mu2>
+      <kp>1000000.0</kp>
+      <kd>100.0</kd>
+      <minDepth>0.001</minDepth>
+    </gazebo>
+
+    <!-- Right track -->
+    <gazebo reference="right_track_link">
+      <material>Gazebo/Black</material>
+      <turnGravityOff>false</turnGravityOff>
+      <mu1>0.9</mu1>
+      <mu2>0.9</mu2>
+      <kp>1000000.0</kp>
+      <kd>100.0</kd>
+      <minDepth>0.001</minDepth>
+    </gazebo>
+
+    <!-- Left wheel -->
+    <gazebo reference="left_wheel_link">
+      <material>Gazebo/Black</material>
+      <turnGravityOff>false</turnGravityOff>
+      <mu1>0.9</mu1>
+      <mu2>0.9</mu2>
+      <kp>1000000.0</kp>
+      <kd>100.0</kd>
+      <minDepth>0.001</minDepth>
+    </gazebo>
+
+    <!-- Right wheel -->
+    <gazebo reference="right_wheel_link">
+      <material>Gazebo/Black</material>
+      <turnGravityOff>false</turnGravityOff>
+      <mu1>0.9</mu1>
+      <mu2>0.9</mu2>
+      <kp>1000000.0</kp>
+      <kd>100.0</kd>
+      <minDepth>0.001</minDepth>
+    </gazebo>
+
+    <!-- ZED2i Camera -->
+    <gazebo reference="zed2i_link">
+      <material>Gazebo/DarkGrey</material>
+      <turnGravityOff>false</turnGravityOff>
+    </gazebo>
+
+    <!-- ZED2i left camera -->
+    <gazebo reference="zed2i_left_camera_frame">
+      <sensor type="camera" name="zed2i_left_camera">
+        <update_rate>30.0</update_rate>
+        <camera name="zed2i_left">
+          <horizontal_fov>1.91986</horizontal_fov>
+          <image>
+            <width>1920</width>
+            <height>1080</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.02</near>
+            <far>300</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+        </camera>
+        <plugin name="zed2i_left_camera_controller" filename="libgazebo_ros_camera.so">
+          <alwaysOn>true</alwaysOn>
+          <updateRate>30.0</updateRate>
+          <cameraName>zed2i/left</cameraName>
+          <imageTopicName>image_rect_color</imageTopicName>
+          <cameraInfoTopicName>camera_info</cameraInfoTopicName>
+          <frameName>zed2i_left_camera_optical_frame</frameName>
+          <hackBaseline>0.12</hackBaseline>
+          <distortionK1>0.0</distortionK1>
+          <distortionK2>0.0</distortionK2>
+          <distortionK3>0.0</distortionK3>
+          <distortionT1>0.0</distortionT1>
+          <distortionT2>0.0</distortionT2>
+        </plugin>
+      </sensor>
+    </gazebo>
+
+    <!-- ZED2i right camera -->
+    <gazebo reference="zed2i_right_camera_frame">
+      <sensor type="camera" name="zed2i_right_camera">
+        <update_rate>30.0</update_rate>
+        <camera name="zed2i_right">
+          <horizontal_fov>1.91986</horizontal_fov>
+          <image>
+            <width>1920</width>
+            <height>1080</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.02</near>
+            <far>300</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+        </camera>
+        <plugin name="zed2i_right_camera_controller" filename="libgazebo_ros_camera.so">
+          <alwaysOn>true</alwaysOn>
+          <updateRate>30.0</updateRate>
+          <cameraName>zed2i/right</cameraName>
+          <imageTopicName>image_rect_color</imageTopicName>
+          <cameraInfoTopicName>camera_info</cameraInfoTopicName>
+          <frameName>zed2i_right_camera_optical_frame</frameName>
+          <hackBaseline>0.12</hackBaseline>
+          <distortionK1>0.0</distortionK1>
+          <distortionK2>0.0</distortionK2>
+          <distortionK3>0.0</distortionK3>
+          <distortionT1>0.0</distortionT1>
+          <distortionT2>0.0</distortionT2>
+        </plugin>
+      </sensor>
+    </gazebo>
+
+    <!-- ZED2i depth camera -->
+    <gazebo reference="zed2i_depth_camera_frame">
+      <sensor type="depth" name="zed2i_depth_camera">
+        <update_rate>30.0</update_rate>
+        <camera name="zed2i_depth">
+          <horizontal_fov>1.91986</horizontal_fov>
+          <image>
+            <width>1280</width>
+            <height>720</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.05</near>
+            <far>20</far>
+          </clip>
+        </camera>
+        <plugin name="zed2i_depth_camera_controller" filename="libgazebo_ros_openni_kinect.so">
+          <baseline>0.12</baseline>
+          <alwaysOn>true</alwaysOn>
+          <updateRate>30.0</updateRate>
+          <cameraName>zed2i</cameraName>
+          <imageTopicName>depth/image_raw</imageTopicName>
+          <cameraInfoTopicName>depth/camera_info</cameraInfoTopicName>
+          <depthImageTopicName>depth/depth_registered</depthImageTopicName>
+          <depthImageCameraInfoTopicName>depth/camera_info</depthImageCameraInfoTopicName>
+          <pointCloudTopicName>depth/points</pointCloudTopicName>
+          <frameName>zed2i_depth_camera_optical_frame</frameName>
+          <pointCloudCutoff>0.5</pointCloudCutoff>
+          <pointCloudCutoffMax>20.0</pointCloudCutoffMax>
+          <distortionK1>0.0</distortionK1>
+          <distortionK2>0.0</distortionK2>
+          <distortionK3>0.0</distortionK3>
+          <distortionT1>0.0</distortionT1>
+          <distortionT2>0.0</distortionT2>
+          <CxPrime>0.0</CxPrime>
+          <Cx>0.0</Cx>
+          <Cy>0.0</Cy>
+          <focalLength>0.0</focalLength>
+          <hackBaseline>0.0</hackBaseline>
+        </plugin>
+      </sensor>
+    </gazebo>
+
+    <!-- IMU -->
+    <gazebo reference="imu_link">
+      <material>Gazebo/Blue</material>
+      <gravity>true</gravity>
+      <sensor name="imu_sensor" type="imu">
+        <always_on>true</always_on>
+        <update_rate>100</update_rate>
+        <visualize>true</visualize>
+        <plugin name="imu_plugin" filename="libgazebo_ros_imu_sensor.so">
+          <robotNamespace>/tracked_robot</robotNamespace>
+          <topicName>imu/data</topicName>
+          <bodyName>imu_link</bodyName>
+          <updateRateHZ>100.0</updateRateHZ>
+          <gaussianNoise>0.0</gaussianNoise>
+          <xyzOffset>0 0 0</xyzOffset>
+          <rpyOffset>0 0 0</rpyOffset>
+          <frameName>imu_link</frameName>
+          <initialOrientationAsReference>false</initialOrientationAsReference>
+        </plugin>
+      </sensor>
+    </gazebo>
+
+    <!-- Docking IR sensor -->
+    <gazebo reference="dock_ir_link">
+      <material>Gazebo/Red</material>
+      <turnGravityOff>false</turnGravityOff>
+      <sensor type="ray" name="dock_ir_sensor">
+        <pose>0 0 0 0 0 0</pose>
+        <visualize>true</visualize>
+        <update_rate>20</update_rate>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>5</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.05</min_angle>
+              <max_angle>0.05</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>5</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.05</min_angle>
+              <max_angle>0.05</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.01</min>
+            <max>2.0</max>
+            <resolution>0.01</resolution>
+          </range>
+        </ray>
+        <plugin name="gazebo_ros_dock_ir_controller" filename="libgazebo_ros_range.so">
+          <gaussianNoise>0.005</gaussianNoise>
+          <alwaysOn>true</alwaysOn>
+          <updateRate>20</updateRate>
+          <topicName>dock_ir</topicName>
+          <frameName>dock_ir_link</frameName>
+          <radiation>infrared</radiation>
+          <fov>0.1</fov>
+        </plugin>
+      </sensor>
+    </gazebo>
+
+    <!-- Differential drive controller -->
+    <gazebo>
+      <plugin name="gazebo_ros_diff_drive" filename="libgazebo_ros_diff_drive.so">
+        <robotNamespace>/tracked_robot</robotNamespace>
+        <rosDebugLevel>Debug</rosDebugLevel>
+        <commandTopic>cmd_vel</commandTopic>
+        <odometryTopic>odom</odometryTopic>
+        <odometryFrame>odom</odometryFrame>
+        <robotBaseFrame>base_link</robotBaseFrame>
+        <publishOdomTF>true</publishOdomTF>
+        <publishWheelTF>false</publishWheelTF>
+        <publishTf>true</publishTf>
+        <publishWheelJointState>true</publishWheelJointState>
+        <legacyMode>false</legacyMode>
+        <updateRate>50</updateRate>
+        <leftJoint>left_wheel_joint</leftJoint>
+        <rightJoint>right_wheel_joint</rightJoint>
+        <wheelSeparation>${chassis_width}</wheelSeparation>
+        <wheelDiameter>${2*wheel_radius}</wheelDiameter>
+        <wheelAcceleration>1.0</wheelAcceleration>
+        <wheelTorque>100</wheelTorque>
+        <odometrySource>world</odometrySource>
+      </plugin>
+    </gazebo>
+  </xacro:macro>
+  
+  <!-- Include all the gazebo plugins -->
+  <xacro:gazebo_plugins />
+
+</robot>

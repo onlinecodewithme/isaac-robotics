@@ -1,0 +1,241 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="tracked_chassis" params="parent">
+    <!-- Main chassis body -->
+    <link name="chassis_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+        </geometry>
+        <material name="chassis_material">
+          <color rgba="0.1 0.1 0.1 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${chassis_mass}"/>
+        <xacro:box_inertia m="${chassis_mass}" x="${chassis_length}" y="${chassis_width}" z="${chassis_height}"/>
+      </inertial>
+    </link>
+
+    <joint name="chassis_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="chassis_link"/>
+      <origin xyz="0 0 ${chassis_height/2}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Left track assembly -->
+    <link name="left_track_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${track_length} ${track_width} ${track_thickness}"/>
+        </geometry>
+        <material name="track_material">
+          <color rgba="0.2 0.2 0.2 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${track_length} ${track_width} ${track_thickness}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${track_mass}"/>
+        <xacro:box_inertia m="${track_mass}" x="${track_length}" y="${track_width}" z="${track_thickness}"/>
+      </inertial>
+    </link>
+
+    <joint name="left_track_joint" type="fixed">
+      <parent link="chassis_link"/>
+      <child link="left_track_link"/>
+      <origin xyz="0 ${chassis_width/2 - track_width/2} ${-chassis_height/2 - track_thickness/2 + ground_clearance}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Right track assembly -->
+    <link name="right_track_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${track_length} ${track_width} ${track_thickness}"/>
+        </geometry>
+        <material name="track_material">
+          <color rgba="0.2 0.2 0.2 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${track_length} ${track_width} ${track_thickness}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${track_mass}"/>
+        <xacro:box_inertia m="${track_mass}" x="${track_length}" y="${track_width}" z="${track_thickness}"/>
+      </inertial>
+    </link>
+
+    <joint name="right_track_joint" type="fixed">
+      <parent link="chassis_link"/>
+      <child link="right_track_link"/>
+      <origin xyz="0 ${-chassis_width/2 + track_width/2} ${-chassis_height/2 - track_thickness/2 + ground_clearance}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Left drive wheel -->
+    <link name="left_wheel_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="wheel_material">
+          <color rgba="0.1 0.1 0.1 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${wheel_mass}"/>
+        <xacro:cylinder_inertia m="${wheel_mass}" r="${wheel_radius}" h="${wheel_width}"/>
+      </inertial>
+    </link>
+
+    <joint name="left_wheel_joint" type="continuous">
+      <parent link="chassis_link"/>
+      <child link="left_wheel_link"/>
+      <origin xyz="${-chassis_length/4} ${chassis_width/2} ${-chassis_height/2 + ground_clearance}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <dynamics damping="0.1" friction="0.1"/>
+    </joint>
+
+    <!-- Right drive wheel -->
+    <link name="right_wheel_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="wheel_material">
+          <color rgba="0.1 0.1 0.1 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${wheel_mass}"/>
+        <xacro:cylinder_inertia m="${wheel_mass}" r="${wheel_radius}" h="${wheel_width}"/>
+      </inertial>
+    </link>
+
+    <joint name="right_wheel_joint" type="continuous">
+      <parent link="chassis_link"/>
+      <child link="right_wheel_link"/>
+      <origin xyz="${-chassis_length/4} ${-chassis_width/2} ${-chassis_height/2 + ground_clearance}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <dynamics damping="0.1" friction="0.1"/>
+    </joint>
+
+    <!-- Left motor -->
+    <link name="left_motor_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 ${pi/2} 0"/>
+        <geometry>
+          <cylinder radius="${motor_radius}" length="${motor_length}"/>
+        </geometry>
+        <material name="motor_material">
+          <color rgba="0.4 0.4 0.4 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 ${pi/2} 0"/>
+        <geometry>
+          <cylinder radius="${motor_radius}" length="${motor_length}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${motor_mass}"/>
+        <xacro:cylinder_inertia m="${motor_mass}" r="${motor_radius}" h="${motor_length}"/>
+      </inertial>
+    </link>
+
+    <joint name="left_motor_joint" type="fixed">
+      <parent link="chassis_link"/>
+      <child link="left_motor_link"/>
+      <origin xyz="${-chassis_length/4 - motor_length/2} ${chassis_width/2 - motor_radius} ${-chassis_height/2 + ground_clearance + motor_radius}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Right motor -->
+    <link name="right_motor_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 ${pi/2} 0"/>
+        <geometry>
+          <cylinder radius="${motor_radius}" length="${motor_length}"/>
+        </geometry>
+        <material name="motor_material">
+          <color rgba="0.4 0.4 0.4 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 ${pi/2} 0"/>
+        <geometry>
+          <cylinder radius="${motor_radius}" length="${motor_length}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${motor_mass}"/>
+        <xacro:cylinder_inertia m="${motor_mass}" r="${motor_radius}" h="${motor_length}"/>
+      </inertial>
+    </link>
+
+    <joint name="right_motor_joint" type="fixed">
+      <parent link="chassis_link"/>
+      <child link="right_motor_link"/>
+      <origin xyz="${-chassis_length/4 - motor_length/2} ${-chassis_width/2 + motor_radius} ${-chassis_height/2 + ground_clearance + motor_radius}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- ODrive controller -->
+    <link name="odrive_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.12 0.08 0.03"/>
+        </geometry>
+        <material name="odrive_material">
+          <color rgba="0.0 0.0 0.8 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.12 0.08 0.03"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="0.5"/>
+        <xacro:box_inertia m="0.5" x="0.12" y="0.08" z="0.03"/>
+      </inertial>
+    </link>
+
+    <joint name="odrive_joint" type="fixed">
+      <parent link="chassis_link"/>
+      <child link="odrive_link"/>
+      <origin xyz="${-chassis_length/4} 0 ${-chassis_height/2 + 0.1}" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+</robot>

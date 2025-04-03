@@ -1,0 +1,145 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Gazebo plugins for the tracked robot -->
+  <xacro:macro name="tracked_robot_gazebo">
+
+    <!-- Gazebo material -->
+    <gazebo reference="chassis_link">
+      <material>Gazebo/Black</material>
+    </gazebo>
+
+    <gazebo reference="left_track_link">
+      <material>Gazebo/DarkGrey</material>
+      <mu1>0.9</mu1>
+      <mu2>0.9</mu2>
+    </gazebo>
+
+    <gazebo reference="right_track_link">
+      <material>Gazebo/DarkGrey</material>
+      <mu1>0.9</mu1>
+      <mu2>0.9</mu2>
+    </gazebo>
+
+    <gazebo reference="left_wheel_link">
+      <material>Gazebo/DarkGrey</material>
+      <mu1>0.9</mu1>
+      <mu2>0.9</mu2>
+    </gazebo>
+
+    <gazebo reference="right_wheel_link">
+      <material>Gazebo/DarkGrey</material>
+      <mu1>0.9</mu1>
+      <mu2>0.9</mu2>
+    </gazebo>
+
+    <gazebo reference="left_motor_link">
+      <material>Gazebo/Grey</material>
+    </gazebo>
+
+    <gazebo reference="right_motor_link">
+      <material>Gazebo/Grey</material>
+    </gazebo>
+
+    <gazebo reference="odrive_link">
+      <material>Gazebo/Blue</material>
+    </gazebo>
+
+    <gazebo reference="zed2i_link">
+      <material>Gazebo/Black</material>
+    </gazebo>
+
+    <gazebo reference="jetson_link">
+      <material>Gazebo/Green</material>
+    </gazebo>
+
+    <!-- Differential drive controller -->
+    <gazebo>
+      <plugin name="differential_drive_controller" filename="libgazebo_ros_diff_drive.so">
+        <updateRate>30</updateRate>
+        <leftJoint>left_wheel_joint</leftJoint>
+        <rightJoint>right_wheel_joint</rightJoint>
+        <wheelSeparation>${chassis_width}</wheelSeparation>
+        <wheelDiameter>${2 * wheel_radius}</wheelDiameter>
+        <wheelAcceleration>1.0</wheelAcceleration>
+        <wheelTorque>50</wheelTorque>
+        <commandTopic>cmd_vel</commandTopic>
+        <odometryTopic>odom</odometryTopic>
+        <odometryFrame>odom</odometryFrame>
+        <robotBaseFrame>base_link</robotBaseFrame>
+        <publishWheelTF>true</publishWheelTF>
+        <publishOdomTF>true</publishOdomTF>
+        <publishWheelJointState>true</publishWheelJointState>
+        <legacyMode>false</legacyMode>
+        <odometrySource>world</odometrySource>
+        <publishTf>true</publishTf>
+        <rosDebugLevel>na</rosDebugLevel>
+      </plugin>
+    </gazebo>
+
+    <!-- IMU sensor -->
+    <gazebo reference="imu_link">
+      <material>Gazebo/Blue</material>
+      <gravity>true</gravity>
+      <sensor name="imu_sensor" type="imu">
+        <always_on>true</always_on>
+        <update_rate>100</update_rate>
+        <visualize>true</visualize>
+        <topic>imu</topic>
+        <plugin filename="libgazebo_ros_imu_sensor.so" name="imu_plugin">
+          <topicName>imu/data</topicName>
+          <bodyName>imu_link</bodyName>
+          <updateRateHZ>100.0</updateRateHZ>
+          <gaussianNoise>0.0</gaussianNoise>
+          <xyzOffset>0 0 0</xyzOffset>
+          <rpyOffset>0 0 0</rpyOffset>
+          <frameName>imu_link</frameName>
+        </plugin>
+        <pose>0 0 0 0 0 0</pose>
+      </sensor>
+    </gazebo>
+
+    <!-- ZED camera model --> 
+    <gazebo reference="zed2i_link">
+      <sensor type="camera" name="zed2i_left_camera">
+        <update_rate>30.0</update_rate>
+        <camera name="zed2i_left">
+          <horizontal_fov>1.047</horizontal_fov>
+          <image>
+            <width>1280</width>
+            <height>720</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.02</near>
+            <far>300</far>
+          </clip>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.007</stddev>
+          </noise>
+        </camera>
+        <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+          <alwaysOn>true</alwaysOn>
+          <updateRate>30.0</updateRate>
+          <cameraName>zed2i/left</cameraName>
+          <imageTopicName>image_raw</imageTopicName>
+          <cameraInfoTopicName>camera_info</cameraInfoTopicName>
+          <frameName>zed2i_left_camera_optical_frame</frameName>
+          <hackBaseline>0.0</hackBaseline>
+          <distortionK1>0.0</distortionK1>
+          <distortionK2>0.0</distortionK2>
+          <distortionK3>0.0</distortionK3>
+          <distortionT1>0.0</distortionT1>
+          <distortionT2>0.0</distortionT2>
+        </plugin>
+      </sensor>
+    </gazebo>
+
+  </xacro:macro>
+
+  <!-- Include the gazebo plugins -->
+  <xacro:tracked_robot_gazebo />
+
+</robot>
