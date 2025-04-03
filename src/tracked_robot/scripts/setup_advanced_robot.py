@@ -25,7 +25,7 @@ from pathlib import Path
 class SetupManager:
     def __init__(self):
         self.script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-        self.repo_dir = self.script_dir.parent.parent  # Tracked robot repo root directory
+        self.repo_dir = Path('/home/x4/isaac_xavier')  # Tracked robot repo root directory on Jetson
         
         # Setup status
         self.hardware_detected = {

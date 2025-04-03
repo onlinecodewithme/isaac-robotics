@@ -13,33 +13,48 @@ This guide provides step-by-step instructions to deploy and test the Advanced Tr
 
 ## 1. Deploy the Code to Jetson
 
-You can either clone the repository directly on the Jetson or transfer the files from your development machine.
+Your project is already located at `/home/x4/isaac_xavier` on your Jetson. If you need to update it with the latest changes, you can use these methods:
 
-### Option A: Direct Clone on Jetson
+### Option A: Update Existing Repository
 
 ```bash
 # SSH to your Jetson
 ssh x4@192.168.1.83
 
-# Create workspace directory (if it doesn't exist)
-mkdir -p ~/isaac_robotics
+# Navigate to your project directory
+cd /home/x4/isaac_xavier
 
-# Navigate to workspace
-cd ~/isaac_robotics
-
-# Clone the repository
-git clone https://github.com/onlinecodewithme/isaac-robotics.git .
-
-# OR if you want to pull updates to an existing repo
+# Pull latest changes if it's a git repository
 git pull origin main
+
+# OR, if you need to update specific files:
+# cp -r /path/to/new/files/* .
 ```
 
 ### Option B: Transfer Files from Development Machine
 
 ```bash
 # From your development machine, not the Jetson
-# Transfer the entire repository to Jetson using rsync
-rsync -avz --exclude='.git/' /Users/randikaprasad/isaac_robotics/ x4@192.168.1.83:~/isaac_robotics/
+# Transfer the updated files to Jetson using rsync
+rsync -avz --exclude='.git/' /Users/randikaprasad/isaac_robotics/ x4@192.168.1.83:/home/x4/isaac_xavier/
+```
+
+### Option C: Create Backup and Deploy Fresh
+
+If you need to start fresh while preserving your existing setup:
+
+```bash
+# SSH to your Jetson
+ssh x4@192.168.1.83
+
+# Backup your existing setup (optional)
+cp -r /home/x4/isaac_xavier /home/x4/isaac_xavier_backup_$(date +%Y%m%d)
+
+# Clean the directory (if needed)
+# rm -rf /home/x4/isaac_xavier/*
+
+# Then transfer new files from development machine
+# rsync -avz --exclude='.git/' /Users/randikaprasad/isaac_robotics/ x4@192.168.1.83:/home/x4/isaac_xavier/
 ```
 
 ## 2. Build the Workspace on Jetson
@@ -51,11 +66,15 @@ SSH into your Jetson and build the workspace:
 ssh x4@192.168.1.83
 
 # Navigate to workspace
-cd ~/isaac_robotics
+cd /home/x4/isaac_xavier
 
-# Install any missing dependencies
+# Install missing ROS2 build dependencies
 sudo apt-get update
-sudo apt-get install -y python3-pip python3-vcstool python3-rosdep
+sudo apt-get install -y python3-pip python3-vcstool python3-rosdep \
+    python3-colcon-common-extensions ros-humble-ament-cmake-core \
+    ros-humble-ament-cmake-ros ros-humble-ament-cmake-python
+
+# Install ODrive Python library
 pip install odrive fibre
 
 # Initialize rosdep if not done before
@@ -65,8 +84,20 @@ rosdep update
 # Install ROS dependencies
 rosdep install --from-paths src --ignore-src -r -y
 
-# Build the workspace
+# Source ROS environment before building
+source /opt/ros/humble/setup.bash
+
+# Build the workspace - make sure you're in the workspace root
 colcon build --symlink-install
+```
+
+If you encounter build errors about missing packages, you might need to install additional dependencies:
+
+```bash
+# Install common dependencies that might be needed
+sudo apt-get install -y ros-humble-navigation2 ros-humble-nav2-bringup \
+    ros-humble-slam-toolbox ros-humble-joint-state-publisher \
+    ros-humble-robot-state-publisher ros-humble-xacro
 ```
 
 ## 3. Set Up Hardware and Test Components
@@ -80,10 +111,10 @@ The setup assistant will help you configure each component:
 source /opt/ros/humble/setup.bash
 
 # Make sure setup scripts are executable
-chmod +x ~/isaac_robotics/src/tracked_robot/scripts/*.py
+chmod +x /home/x4/isaac_xavier/src/tracked_robot/scripts/*.py
 
 # Run the setup assistant
-~/isaac_robotics/src/tracked_robot/scripts/setup_advanced_robot.py
+/home/x4/isaac_xavier/src/tracked_robot/scripts/setup_advanced_robot.py
 ```
 
 Follow the interactive menu to:
@@ -98,7 +129,7 @@ If you prefer to configure the ODrive separately:
 
 ```bash
 # Run the ODrive setup script directly
-~/isaac_robotics/src/tracked_robot/scripts/odrive_setup.py
+/home/x4/isaac_xavier/src/tracked_robot/scripts/odrive_setup.py
 ```
 
 This script will:
@@ -113,7 +144,7 @@ If you prefer to configure the ZED camera separately:
 
 ```bash
 # Run the ZED setup script directly
-~/isaac_robotics/src/tracked_robot/scripts/zed_camera_setup.py
+/home/x4/isaac_xavier/src/tracked_robot/scripts/zed_camera_setup.py
 ```
 
 This script will:
@@ -129,7 +160,7 @@ After setting up the individual components, test the full system:
 ```bash
 # Source ROS and workspace
 source /opt/ros/humble/setup.bash
-source ~/isaac_robotics/install/setup.bash
+source /home/x4/isaac_xavier/install/setup.bash
 
 # Launch the advanced robot with all components
 ros2 launch tracked_robot advanced_robot.launch.py
