@@ -32,24 +32,24 @@
   <depend>urdf</depend>
   
   <!-- Navigation -->
-  <exec_depend>nav2_bringup</exec_depend>
-  <exec_depend>nav2_common</exec_depend>
-  <exec_depend>nav2_costmap_2d</exec_depend>
-  <exec_depend>nav2_core</exec_depend>
-  <exec_depend>nav2_behavior_tree</exec_depend>
-  <exec_depend>nav2_msgs</exec_depend>
-  <exec_depend>nav2_util</exec_depend>
+  <exec_depend condition="$ROS_VERSION == 2">nav2_bringup</exec_depend>
+  <exec_depend condition="$ROS_VERSION == 2">nav2_common</exec_depend>
+  <exec_depend condition="$ROS_VERSION == 2">nav2_costmap_2d</exec_depend>
+  <exec_depend condition="$ROS_VERSION == 2">nav2_core</exec_depend>
+  <exec_depend condition="$ROS_VERSION == 2">nav2_behavior_tree</exec_depend>
+  <exec_depend condition="$ROS_VERSION == 2">nav2_msgs</exec_depend>
+  <exec_depend condition="$ROS_VERSION == 2">nav2_util</exec_depend>
   
   <!-- SLAM -->
-  <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend condition="$ROS_VERSION == 2">slam_toolbox</exec_depend>
   
-  <!-- ZED Camera - optional dependencies -->
-  <exec_depend>zed_wrapper</exec_depend>
-  <exec_depend>zed_components</exec_depend>
+  <!-- ZED Camera dependencies -->
+  <exec_depend condition="$ROS_VERSION == 2">zed_wrapper</exec_depend>
+  <exec_depend condition="$ROS_VERSION == 2">zed_components</exec_depend>
   
-  <!-- NVIDIA Isaac ROS - optional dependencies -->
-  <exec_depend>isaac_ros_visual_slam</exec_depend>
-  <exec_depend>isaac_ros_nova</exec_depend>
+  <!-- NVIDIA Isaac ROS dependencies -->
+  <exec_depend condition="$ROS_VERSION == 2">isaac_ros_visual_slam</exec_depend>
+  <exec_depend condition="$ROS_VERSION == 2">isaac_ros_nova</exec_depend>
 
   <!-- System Dependencies that need to be installed -->
   <exec_depend>python3-odrive</exec_depend>

@@ -61,6 +61,8 @@ cp -r /home/x4/isaac_xavier /home/x4/isaac_xavier_backup_$(date +%Y%m%d)
 
 SSH into your Jetson and build the workspace:
 
+### Step 1: Install Dependencies
+
 ```bash
 # SSH to your Jetson
 ssh x4@192.168.1.83
@@ -74,6 +76,14 @@ sudo apt-get install -y python3-pip python3-vcstool python3-rosdep \
     python3-colcon-common-extensions ros-humble-ament-cmake-core \
     ros-humble-ament-cmake-ros ros-humble-ament-cmake-python
 
+# Install NVIDIA VPI (Vision Programming Interface)
+# (Required for isaac_ros_common)
+sudo apt-get install -y nvidia-vpi
+
+# Make sure NVIDIA VPI is in your CMAKE_PREFIX_PATH
+echo 'export CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH:/opt/nvidia/vpi1' >> ~/.bashrc
+source ~/.bashrc
+
 # Install ODrive Python library
 pip install odrive fibre
 
@@ -84,20 +94,59 @@ rosdep update
 # Install ROS dependencies
 rosdep install --from-paths src --ignore-src -r -y
 
-# Source ROS environment before building
-source /opt/ros/humble/setup.bash
-
-# Build the workspace - make sure you're in the workspace root
-colcon build --symlink-install
-```
-
-If you encounter build errors about missing packages, you might need to install additional dependencies:
-
-```bash
-# Install common dependencies that might be needed
+# Install common dependencies that are needed
 sudo apt-get install -y ros-humble-navigation2 ros-humble-nav2-bringup \
     ros-humble-slam-toolbox ros-humble-joint-state-publisher \
     ros-humble-robot-state-publisher ros-humble-xacro
+```
+
+### Step 2: Build with COLCON_IGNORE to Handle Dependencies
+
+The best way to handle dependency issues is to use COLCON_IGNORE files to temporarily skip problematic packages:
+
+```bash
+# Source ROS environment
+source /opt/ros/humble/setup.bash
+
+# Create COLCON_IGNORE files in problematic package directories
+touch src/isaac_ros_common/COLCON_IGNORE
+touch src/isaac_ros_nitros/COLCON_IGNORE
+touch src/isaac_ros_visual_slam/COLCON_IGNORE
+touch src/isaac_ros_nova/COLCON_IGNORE
+touch src/isaac_ros_image_pipeline/COLCON_IGNORE
+touch src/isaac_ros_dnn_inference/COLCON_IGNORE
+touch src/vision_msgs/COLCON_IGNORE
+touch src/vision_opencv/COLCON_IGNORE
+touch src/zed-ros2-wrapper/COLCON_IGNORE
+
+# Now build only the tracked robot packages
+colcon build --symlink-install --packages-select tracked_robot tracked_robot_msgs
+```
+
+This approach keeps all the proper dependencies in your package.xml but tells colcon to ignore building certain packages, allowing your core robot functionality to build successfully.
+
+Alternatively, if you prefer a simpler approach:
+
+```bash
+# Build only specific packages without creating COLCON_IGNORE files
+COLCON_IGNORE_SKIP_UNTIL_BUILD=true colcon build --symlink-install --packages-select tracked_robot tracked_robot_msgs
+```
+
+This should build our tracked_robot package without requiring all the dependencies that are causing issues.
+
+### Step 3 (Optional): Try Building Full System
+
+If you want to eventually build the full system with Isaac ROS, you'll need to properly install NVIDIA components:
+
+```bash
+# For Isaac ROS, follow the official installation guide:
+# https://nvidia-isaac-ros.github.io/getting_started/index.html
+
+# Example (specific steps may vary):
+sudo apt-get install -y nvidia-container-toolkit nvidia-docker2
+sudo systemctl restart docker
+
+# Clone and build Isaac ROS packages separately following NVIDIA's instructions
 ```
 
 ## 3. Set Up Hardware and Test Components
