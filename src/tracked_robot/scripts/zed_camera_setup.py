@@ -68,7 +68,7 @@ def test_camera_connection():
     init_params.camera_fps = 30  # Set FPS to 30
     init_params.depth_mode = sl.DEPTH_MODE.PERFORMANCE  # Use performance depth mode
     init_params.coordinate_units = sl.UNIT.METER  # Set units to meters
-    init_params.sdk_verbose = True  # Enable verbose logging
+    init_params.sdk_verbose = 1  # Enable verbose logging (use integer 1 instead of boolean True)
     
     # Try to open the camera
     print("Opening ZED 2i camera...")
