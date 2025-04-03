@@ -121,9 +121,19 @@ def test_camera_connection():
     except Exception as e:
         print(f"Note: Could not retrieve resolution/FPS information: {e}")
     
-    # Check camera temperature
-    temp = cam.get_camera_temperature()
-    print(f"Camera Temperature: {temp}°C")
+    # Check camera temperature (with version compatibility)
+    try:
+        # Different ZED SDK versions might have different methods
+        if hasattr(cam, 'get_camera_temperature'):
+            temp = cam.get_camera_temperature()
+            print(f"Camera Temperature: {temp}°C")
+        elif hasattr(cam, 'get_temperature'):
+            temp = cam.get_temperature()
+            print(f"Camera Temperature: {temp}°C")
+        else:
+            print("Camera temperature check not available in this ZED SDK version")
+    except Exception as e:
+        print(f"Could not get camera temperature: {e}")
     
     # Check if we can get an image
     print("Capturing a test image...")
