@@ -85,16 +85,37 @@ def configure_odrive_for_bldc_motors(odrv, config):
         
         print(f"{axis_name} configuration complete.")
     
-    # Configure brake resistor if present
+    # Configure brake resistor if present and if the attribute exists (firmware version dependent)
     if config['brake_resistance'] > 0:
         print("\nConfiguring brake resistor...")
-        odrv.config.brake_resistance = config['brake_resistance']
-        odrv.config.enable_brake_resistor = True
+        # Handle different ODrive firmware versions that might have different attribute names
+        try:
+            # Try setting brake resistance
+            if hasattr(odrv.config, 'brake_resistance'):
+                odrv.config.brake_resistance = config['brake_resistance']
+                
+            # Try enabling brake resistor - attribute name varies by firmware version
+            if hasattr(odrv.config, 'enable_brake_resistor'):
+                odrv.config.enable_brake_resistor = True
+            elif hasattr(odrv, 'config_brake_resistance'):
+                odrv.config_brake_resistance = config['brake_resistance']
+            elif hasattr(odrv.config, 'brake_resistor_enabled'):
+                odrv.config.brake_resistor_enabled = True
+            else:
+                print("Note: Brake resistor configuration not available in this firmware version. Skipping.")
+        except Exception as e:
+            print(f"Warning: Could not configure brake resistor: {str(e)}")
+            print("This is not critical and the system will continue without brake resistor.")
     
-    # Set up protection
+    # Set up protection (also handle potential missing attributes)
     print("\nConfiguring protections...")
-    odrv.config.dc_max_negative_current = -10.0  # Amps
-    odrv.config.max_regen_current = 10.0  # Amps
+    try:
+        if hasattr(odrv.config, 'dc_max_negative_current'):
+            odrv.config.dc_max_negative_current = -10.0  # Amps
+        if hasattr(odrv.config, 'max_regen_current'):
+            odrv.config.max_regen_current = 10.0  # Amps
+    except Exception as e:
+        print(f"Warning: Could not configure some protections: {str(e)}")
     
     # Save configuration to ODrive's persistent storage
     print("\nSaving configuration to ODrive...")
