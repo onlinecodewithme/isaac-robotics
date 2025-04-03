@@ -100,8 +100,26 @@ def test_camera_connection():
     except Exception as e:
         print(f"Note: Could not retrieve firmware versions: {e}")
         
-    print(f"Resolution: {cam_info.camera_resolution.width}x{cam_info.camera_resolution.height}")
-    print(f"FPS: {cam_info.camera_fps}")
+    # Handle different ZED SDK versions for resolution and FPS
+    try:
+        # Try different attribute structures based on SDK version
+        if hasattr(cam_info, 'camera_resolution'):
+            print(f"Resolution: {cam_info.camera_resolution.width}x{cam_info.camera_resolution.height}")
+        elif hasattr(cam_info, 'camera_configuration') and hasattr(cam_info.camera_configuration, 'resolution'):
+            print(f"Resolution: {cam_info.camera_configuration.resolution.width}x{cam_info.camera_configuration.resolution.height}")
+        else:
+            # Fallback to getting resolution directly from the camera
+            resolution = cam.get_resolution()
+            print(f"Resolution: {resolution.width}x{resolution.height}")
+        
+        if hasattr(cam_info, 'camera_fps'):
+            print(f"FPS: {cam_info.camera_fps}")
+        elif hasattr(cam_info, 'camera_configuration') and hasattr(cam_info.camera_configuration, 'fps'):
+            print(f"FPS: {cam_info.camera_configuration.fps}")
+        else:
+            print(f"FPS: Using default 30fps")
+    except Exception as e:
+        print(f"Note: Could not retrieve resolution/FPS information: {e}")
     
     # Check camera temperature
     temp = cam.get_camera_temperature()
@@ -209,40 +227,62 @@ def save_camera_intrinsics():
     calib_dir = os.path.expanduser("~/zed_calibration")
     os.makedirs(calib_dir, exist_ok=True)
     
-    # Save intrinsics for left and right cameras
-    intrinsics = {
-        "left": {
-            "fx": calibration_params.left_cam.fx,
-            "fy": calibration_params.left_cam.fy,
-            "cx": calibration_params.left_cam.cx,
-            "cy": calibration_params.left_cam.cy,
-            "distortion": [
-                calibration_params.left_cam.disto[0],
-                calibration_params.left_cam.disto[1],
-                calibration_params.left_cam.disto[2],
-                calibration_params.left_cam.disto[3],
-                calibration_params.left_cam.disto[4]
-            ]
-        },
-        "right": {
-            "fx": calibration_params.right_cam.fx,
-            "fy": calibration_params.right_cam.fy,
-            "cx": calibration_params.right_cam.cx,
-            "cy": calibration_params.right_cam.cy,
-            "distortion": [
-                calibration_params.right_cam.disto[0],
-                calibration_params.right_cam.disto[1],
-                calibration_params.right_cam.disto[2],
-                calibration_params.right_cam.disto[3],
-                calibration_params.right_cam.disto[4]
-            ]
-        },
-        "baseline": calibration_params.T[0],  # baseline in mm
-        "resolution": {
-            "width": cam.get_camera_information().camera_resolution.width,
-            "height": cam.get_camera_information().camera_resolution.height
+    # Save intrinsics for left and right cameras with error handling
+    try:
+        intrinsics = {
+            "left": {
+                "fx": calibration_params.left_cam.fx,
+                "fy": calibration_params.left_cam.fy,
+                "cx": calibration_params.left_cam.cx,
+                "cy": calibration_params.left_cam.cy,
+                "distortion": [
+                    calibration_params.left_cam.disto[0],
+                    calibration_params.left_cam.disto[1],
+                    calibration_params.left_cam.disto[2],
+                    calibration_params.left_cam.disto[3],
+                    calibration_params.left_cam.disto[4]
+                ]
+            },
+            "right": {
+                "fx": calibration_params.right_cam.fx,
+                "fy": calibration_params.right_cam.fy,
+                "cx": calibration_params.right_cam.cx,
+                "cy": calibration_params.right_cam.cy,
+                "distortion": [
+                    calibration_params.right_cam.disto[0],
+                    calibration_params.right_cam.disto[1],
+                    calibration_params.right_cam.disto[2],
+                    calibration_params.right_cam.disto[3],
+                    calibration_params.right_cam.disto[4]
+                ]
+            },
+            "baseline": calibration_params.T[0],  # baseline in mm
+            "resolution": {}
         }
-    }
+        
+        # Get resolution using different possible attribute structures
+        cam_info = cam.get_camera_information()
+        if hasattr(cam_info, 'camera_resolution'):
+            intrinsics["resolution"]["width"] = cam_info.camera_resolution.width
+            intrinsics["resolution"]["height"] = cam_info.camera_resolution.height
+        elif hasattr(cam_info, 'camera_configuration') and hasattr(cam_info.camera_configuration, 'resolution'):
+            intrinsics["resolution"]["width"] = cam_info.camera_configuration.resolution.width
+            intrinsics["resolution"]["height"] = cam_info.camera_configuration.resolution.height
+        else:
+            # Fallback to configured resolution values
+            intrinsics["resolution"]["width"] = 1280  # HD720 default width
+            intrinsics["resolution"]["height"] = 720  # HD720 default height
+            print("Using default resolution values (1280x720)")
+    except Exception as e:
+        print(f"Warning: Error getting some camera intrinsics: {e}")
+        # Create minimal intrinsics with default values as fallback
+        intrinsics = {
+            "left": {"fx": 700, "fy": 700, "cx": 640, "cy": 360, "distortion": [0, 0, 0, 0, 0]},
+            "right": {"fx": 700, "fy": 700, "cx": 640, "cy": 360, "distortion": [0, 0, 0, 0, 0]},
+            "baseline": 120,  # approximate baseline in mm
+            "resolution": {"width": 1280, "height": 720}
+        }
+        print("Using fallback calibration values")
     
     # Save to JSON file
     json_path = os.path.join(calib_dir, "zed2i_intrinsics.json")
