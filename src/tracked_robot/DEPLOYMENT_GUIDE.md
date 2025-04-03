@@ -1,0 +1,251 @@
+# Deployment and Testing Guide for Advanced Tracked Robot
+
+This guide provides step-by-step instructions to deploy and test the Advanced Tracked Robot implementation on your Jetson Orin NX with the connected ODrive controller and ZED 2i camera.
+
+## Prerequisites
+
+- Jetson Orin NX (IP: 192.168.1.83, Username: x4)
+- ODrive controller connected via USB
+- ZED 2i camera connected via USB 3.0
+- ROS2 Humble installed on Jetson
+- NVIDIA Isaac ROS packages installed
+- ZED SDK installed
+
+## 1. Deploy the Code to Jetson
+
+You can either clone the repository directly on the Jetson or transfer the files from your development machine.
+
+### Option A: Direct Clone on Jetson
+
+```bash
+# SSH to your Jetson
+ssh x4@192.168.1.83
+
+# Create workspace directory (if it doesn't exist)
+mkdir -p ~/isaac_robotics
+
+# Navigate to workspace
+cd ~/isaac_robotics
+
+# Clone the repository
+git clone https://github.com/onlinecodewithme/isaac-robotics.git .
+
+# OR if you want to pull updates to an existing repo
+git pull origin main
+```
+
+### Option B: Transfer Files from Development Machine
+
+```bash
+# From your development machine, not the Jetson
+# Transfer the entire repository to Jetson using rsync
+rsync -avz --exclude='.git/' /Users/randikaprasad/isaac_robotics/ x4@192.168.1.83:~/isaac_robotics/
+```
+
+## 2. Build the Workspace on Jetson
+
+SSH into your Jetson and build the workspace:
+
+```bash
+# SSH to your Jetson
+ssh x4@192.168.1.83
+
+# Navigate to workspace
+cd ~/isaac_robotics
+
+# Install any missing dependencies
+sudo apt-get update
+sudo apt-get install -y python3-pip python3-vcstool python3-rosdep
+pip install odrive fibre
+
+# Initialize rosdep if not done before
+sudo rosdep init  # Skip if already initialized
+rosdep update
+
+# Install ROS dependencies
+rosdep install --from-paths src --ignore-src -r -y
+
+# Build the workspace
+colcon build --symlink-install
+```
+
+## 3. Set Up Hardware and Test Components
+
+### Step 1: Run the Setup Assistant
+
+The setup assistant will help you configure each component:
+
+```bash
+# Source the ROS environment
+source /opt/ros/humble/setup.bash
+
+# Make sure setup scripts are executable
+chmod +x ~/isaac_robotics/src/tracked_robot/scripts/*.py
+
+# Run the setup assistant
+~/isaac_robotics/src/tracked_robot/scripts/setup_advanced_robot.py
+```
+
+Follow the interactive menu to:
+1. Set up ODrive motor controller
+2. Set up ZED 2i camera
+3. Check ROS2 workspace
+4. Test each component individually
+
+### Step 2: Configure ODrive Controller
+
+If you prefer to configure the ODrive separately:
+
+```bash
+# Run the ODrive setup script directly
+~/isaac_robotics/src/tracked_robot/scripts/odrive_setup.py
+```
+
+This script will:
+- Detect your ODrive
+- Configure parameters for your 1kW BLDC motors
+- Calibrate the motors (follow on-screen instructions)
+- Test basic movement
+
+### Step 3: Configure ZED Camera
+
+If you prefer to configure the ZED camera separately:
+
+```bash
+# Run the ZED setup script directly
+~/isaac_robotics/src/tracked_robot/scripts/zed_camera_setup.py
+```
+
+This script will:
+- Test connection to your ZED 2i camera
+- Save calibration parameters
+- Test ROS2 integration
+- Check for compatibility with NVIDIA Isaac
+
+## 4. Test Full System Integration
+
+After setting up the individual components, test the full system:
+
+```bash
+# Source ROS and workspace
+source /opt/ros/humble/setup.bash
+source ~/isaac_robotics/install/setup.bash
+
+# Launch the advanced robot with all components
+ros2 launch tracked_robot advanced_robot.launch.py
+```
+
+### Verify Each Functionality
+
+After launching the system, test each major functionality:
+
+#### 1. ODrive Motor Control
+
+```bash
+# Move the robot forward for 2 seconds then stop
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.2, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
+sleep 2
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
+
+# Rotate the robot for 2 seconds then stop
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.3}}"
+sleep 2
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
+```
+
+#### 2. ZED Camera and Visual SLAM
+
+In a separate terminal:
+
+```bash
+# View the camera feed
+ros2 run image_tools showimage --ros-args -r image:=/zed2i/rgb/image_rect_color
+
+# Monitor visual SLAM status
+ros2 topic echo /visual_slam/status
+```
+
+#### 3. Auto-Docking
+
+To test the docking system (ensure the ArUco marker is set up on the dock):
+
+```bash
+# Start the docking process
+ros2 service call /dock/start std_srvs/srv/Trigger
+
+# Monitor docking status
+ros2 topic echo /dock/state
+
+# If needed, stop the docking process
+ros2 service call /dock/stop std_srvs/srv/Trigger
+```
+
+## 5. Common Troubleshooting
+
+### ODrive Issues
+
+1. **Cannot connect to ODrive**:
+   - Check USB connection
+   - Verify power supply
+   - Try `sudo chmod 666 /dev/ttyUSB*`
+
+2. **Motor errors during calibration**:
+   - Ensure motors can move freely
+   - Check power supply capacity (needs to handle 1kW motors)
+   - Adjust current limit in `odrive_setup.py` if needed
+
+### ZED Camera Issues
+
+1. **Camera not detected**:
+   - Ensure it's connected to a USB 3.0 port (blue)
+   - Try `sudo lsusb` to verify USB connection
+   - Check `zed-diagnostic` tool from ZED SDK
+
+2. **Topics not publishing**:
+   - Check if ZED wrapper is running: `ros2 node list | grep zed`
+   - Verify camera permissions: `sudo chmod 666 /dev/video*`
+
+### ROS2/Isaac Issues
+
+1. **ROS nodes not starting**:
+   - Check error messages in the launch output
+   - Verify dependencies with `rosdep check --from-paths src`
+   - Make sure your Jetson has enough resources (memory/CPU)
+
+2. **Navigation errors**:
+   - Verify your TF tree is correct: `ros2 run tf2_tools view_frames`
+   - Check if map is being generated: `ros2 topic echo /map -n 1`
+
+## 6. Monitoring System Performance
+
+Monitor system resource usage while running:
+
+```bash
+# Monitor CPU/GPU usage and temperature
+sudo tegrastats
+
+# Monitor ROS2 topic rates (in a separate terminal)
+ros2 topic hz /zed2i/rgb/image_rect_color
+ros2 topic hz /visual_slam/tracking/odometry
+ros2 topic hz /joint_states
+```
+
+## 7. Creating Maps and Saving Them
+
+Once your robot is operational, you can create and save maps:
+
+```bash
+# Start SLAM mode
+ros2 launch tracked_robot advanced_robot.launch.py use_slam:=true
+
+# After mapping, save the map
+ros2 service call /slam_toolbox/save_map slam_toolbox/srv/SaveMap "{name: {data: 'my_map'}}"
+```
+
+## Next Steps
+
+After successful deployment and testing:
+
+1. Fine-tune navigation parameters in `config/nav2_params.yaml`
+2. Adjust the auto-docking parameters if needed
+3. Create a startup service to auto-launch on boot
