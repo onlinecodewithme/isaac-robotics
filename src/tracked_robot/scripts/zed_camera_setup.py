@@ -82,8 +82,24 @@ def test_camera_connection():
     cam_info = cam.get_camera_information()
     print(f"Camera Model: {cam_info.camera_model}")
     print(f"Serial Number: {cam_info.serial_number}")
-    print(f"Camera Firmware: {cam_info.camera_firmware_version}")
-    print(f"Sensors Firmware: {cam_info.sensors_firmware_version}")
+    
+    # Handle different ZED SDK versions - attribute names may vary
+    try:
+        if hasattr(cam_info, 'camera_firmware_version'):
+            print(f"Camera Firmware: {cam_info.camera_firmware_version}")
+        elif hasattr(cam_info, 'firmware_version'):
+            print(f"Camera Firmware: {cam_info.firmware_version}")
+        else:
+            # Get firmware info from logs if available
+            print(f"Camera Firmware: Check ZED logs for version info")
+            
+        if hasattr(cam_info, 'sensors_firmware_version'):
+            print(f"Sensors Firmware: {cam_info.sensors_firmware_version}")
+        elif hasattr(cam_info, 'sensors_configuration') and hasattr(cam_info.sensors_configuration, 'firmware_version'):
+            print(f"Sensors Firmware: {cam_info.sensors_configuration.firmware_version}")
+    except Exception as e:
+        print(f"Note: Could not retrieve firmware versions: {e}")
+        
     print(f"Resolution: {cam_info.camera_resolution.width}x{cam_info.camera_resolution.height}")
     print(f"FPS: {cam_info.camera_fps}")
     
@@ -123,26 +139,48 @@ def test_camera_connection():
         cam.close()
         return False
     
-    # Test sensor data if available
-    if cam_info.sensors_available:
-        print("\nTesting onboard sensors...")
-        sensors_data = sl.SensorsData()
-        
-        if cam.get_sensors_data(sensors_data, sl.TIME_REFERENCE.CURRENT) == sl.ERROR_CODE.SUCCESS:
-            # IMU data
-            imu_data = sensors_data.get_imu_data()
-            print(f"IMU Acceleration: {imu_data.get_linear_acceleration()}")
-            print(f"IMU Angular Velocity: {imu_data.get_angular_velocity()}")
+    # Test sensor data if available - with error handling
+    try:
+        if hasattr(cam_info, 'sensors_available') and cam_info.sensors_available:
+            print("\nTesting onboard sensors...")
+            sensors_data = sl.SensorsData()
             
-            # Magnetometer data
-            mag_data = sensors_data.get_magnetometer_data()
-            print(f"Magnetic Field: {mag_data.get_magnetic_field_calibrated()}")
+            # Set a timeout to avoid blocking
+            sensor_timeout = time.time() + 5  # 5 second timeout
             
-            # Barometer data
-            baro_data = sensors_data.get_barometer_data()
-            print(f"Atmospheric Pressure: {baro_data.pressure} hPa")
+            try:
+                if cam.get_sensors_data(sensors_data, sl.TIME_REFERENCE.CURRENT) == sl.ERROR_CODE.SUCCESS:
+                    # IMU data - with error handling for each sensor
+                    try:
+                        imu_data = sensors_data.get_imu_data()
+                        print(f"IMU Acceleration: {imu_data.get_linear_acceleration()}")
+                        print(f"IMU Angular Velocity: {imu_data.get_angular_velocity()}")
+                    except Exception as e:
+                        print(f"Could not get IMU data: {e}")
+                    
+                    # Magnetometer data - with error handling
+                    try:
+                        mag_data = sensors_data.get_magnetometer_data()
+                        print(f"Magnetic Field: {mag_data.get_magnetic_field_calibrated()}")
+                    except Exception as e:
+                        print(f"Could not get magnetometer data: {e}")
+                    
+                    # Barometer data - with error handling
+                    try:
+                        baro_data = sensors_data.get_barometer_data()
+                        print(f"Atmospheric Pressure: {baro_data.pressure} hPa")
+                    except Exception as e:
+                        print(f"Could not get barometer data: {e}")
+                else:
+                    print("Failed to retrieve sensor data (non-success return code)")
+            except Exception as e:
+                print(f"Error accessing sensor data: {e}")
+                if time.time() > sensor_timeout:
+                    print("Sensor data retrieval timed out")
         else:
-            print("Failed to retrieve sensor data")
+            print("\nNo sensors available on this ZED camera model or SDK version")
+    except Exception as e:
+        print(f"\nError checking sensor availability: {e}")
     
     # Close the camera
     cam.close()
