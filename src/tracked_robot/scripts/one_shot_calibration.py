@@ -86,16 +86,16 @@ except Exception as e:
 """
     return run_command(command)
 
-def perform_calibration_step(axis_num, state):
-    """Perform a calibration step in a separate process"""
-    command = f"""
+def perform_motor_calibration(axis_num):
+    """Perform motor calibration in a separate process"""
+    command = """
 import odrive
 import time
 from odrive.enums import *
 try:
     odrv = odrive.find_any(timeout=10)
-    print(f"Connected to ODrive {{odrv.serial_number}}")
-    axis = getattr(odrv, f"axis{axis_num}")
+    print(f"Connected to ODrive {odrv.serial_number}")
+    axis = getattr(odrv, f"axis""" + str(axis_num) + """")
     
     # Clear errors
     if hasattr(axis, 'error'):
@@ -111,21 +111,19 @@ try:
     axis.requested_state = AXIS_STATE_IDLE
     time.sleep(1.0)
     
-    # Request the calibration state
-    print(f"Starting calibration state: {{state}}")
-    axis.requested_state = {state}
+    # Request motor calibration
+    print("Starting motor calibration")
+    axis.requested_state = AXIS_STATE_MOTOR_CALIBRATION
     
     # Wait for it to finish
     max_wait = 20  # seconds
     start_time = time.time()
-    dots = 0
     
     while time.time() - start_time < max_wait:
         try:
             if axis.current_state == AXIS_STATE_IDLE:
                 break
-            dots = (dots % 3) + 1
-            print("." * dots + " " * (3 - dots), end="\\r")
+            print(".", end="", flush=True)
             time.sleep(0.5)
         except:
             # If we lose connection, just wait
@@ -134,25 +132,86 @@ try:
     print("")  # Newline after dots
     
     # Check result
-    print(f"Calibration completed in {{time.time() - start_time:.1f}} seconds")
-    if axis.current_state == AXIS_STATE_IDLE:
-        if "{state}" == "AXIS_STATE_MOTOR_CALIBRATION" and axis.motor.is_calibrated:
-            print("✓ Motor successfully calibrated!")
-            exit(0)
-        elif "{state}" == "AXIS_STATE_ENCODER_OFFSET_CALIBRATION" and axis.encoder.is_ready:
-            print("✓ Encoder successfully calibrated!")
-            exit(0)
-        elif "{state}" == "AXIS_STATE_ENCODER_HALL_POLARITY_CALIBRATION" and axis.encoder.is_ready:
-            print("✓ Hall sensors successfully calibrated!")
-            exit(0)
-        else:
-            print("Calibration may have failed")
-            exit(1)
+    print(f"Calibration completed in {time.time() - start_time:.1f} seconds")
+    if axis.motor.is_calibrated:
+        print("✓ Motor successfully calibrated!")
+        exit(0)
     else:
-        print(f"Axis in unexpected state: {{axis.current_state}}")
+        print("Motor calibration failed")
+        if hasattr(axis.motor, 'error'):
+            print(f"Motor error: {axis.motor.error}")
         exit(1)
 except Exception as e:
-    print(f"Error: {{e}}")
+    print(f"Error: {e}")
+    exit(1)
+"""
+    return run_command(command)
+
+def perform_encoder_calibration(axis_num, is_hall=True):
+    """Perform encoder calibration in a separate process"""
+    state = "AXIS_STATE_ENCODER_HALL_POLARITY_CALIBRATION" if is_hall else "AXIS_STATE_ENCODER_OFFSET_CALIBRATION"
+    state_desc = "Hall sensor" if is_hall else "encoder offset"
+    
+    command = """
+import odrive
+import time
+from odrive.enums import *
+try:
+    odrv = odrive.find_any(timeout=10)
+    print(f"Connected to ODrive {odrv.serial_number}")
+    axis = getattr(odrv, f"axis""" + str(axis_num) + """")
+    
+    # Check if motor is calibrated
+    if not axis.motor.is_calibrated:
+        print("Motor must be calibrated first!")
+        exit(1)
+    
+    # Clear errors
+    if hasattr(axis, 'error'):
+        axis.error = 0
+    if hasattr(axis.motor, 'error'):
+        axis.motor.error = 0
+    if hasattr(axis.encoder, 'error'):
+        axis.encoder.error = 0
+    if hasattr(axis.controller, 'error'):
+        axis.controller.error = 0
+    
+    # Set to IDLE first
+    axis.requested_state = AXIS_STATE_IDLE
+    time.sleep(1.0)
+    
+    # Request encoder calibration
+    print("Starting """ + state_desc + """ calibration")
+    axis.requested_state = """ + state + """
+    
+    # Wait for it to finish
+    max_wait = 20  # seconds
+    start_time = time.time()
+    
+    while time.time() - start_time < max_wait:
+        try:
+            if axis.current_state == AXIS_STATE_IDLE:
+                break
+            print(".", end="", flush=True)
+            time.sleep(0.5)
+        except:
+            # If we lose connection, just wait
+            time.sleep(0.5)
+    
+    print("")  # Newline after dots
+    
+    # Check result
+    print(f"Calibration completed in {time.time() - start_time:.1f} seconds")
+    if axis.encoder.is_ready:
+        print("✓ Encoder successfully calibrated!")
+        exit(0)
+    else:
+        print("Encoder calibration failed")
+        if hasattr(axis.encoder, 'error'):
+            print(f"Encoder error: {axis.encoder.error}")
+        exit(1)
+except Exception as e:
+    print(f"Error: {e}")
     exit(1)
 """
     return run_command(command)
@@ -228,14 +287,18 @@ def one_shot_calibration(axis_num):
     
     print("\n=== STEP 2: Motor Calibration ===")
     print("Starting motor calibration (resistance measurement)...")
-    perform_calibration_step(axis_num, "AXIS_STATE_MOTOR_CALIBRATION")
+    motor_success = perform_motor_calibration(axis_num)
     
     print("\n=== STEP 3: Encoder Calibration ===")
-    print("Starting Hall sensor calibration...")
-    # Try two different methods - one might work
-    if not perform_calibration_step(axis_num, "AXIS_STATE_ENCODER_HALL_POLARITY_CALIBRATION"):
-        print("Hall polarity calibration failed, trying standard encoder calibration...")
-        perform_calibration_step(axis_num, "AXIS_STATE_ENCODER_OFFSET_CALIBRATION")
+    if motor_success:
+        print("Starting Hall sensor calibration...")
+        # Try two different methods - one might work
+        hall_success = perform_encoder_calibration(axis_num, is_hall=True)
+        if not hall_success:
+            print("Hall polarity calibration failed, trying standard encoder calibration...")
+            perform_encoder_calibration(axis_num, is_hall=False)
+    else:
+        print("Skipping encoder calibration because motor calibration failed")
     
     print("\n=== STEP 4: Checking Final Status ===")
     check_status(axis_num)
