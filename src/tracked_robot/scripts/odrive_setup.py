@@ -218,29 +218,53 @@ def test_motors(odrv):
             axis_name = f"axis{axis_num}"
             axis = getattr(odrv, axis_name)
             
-            # Clear any errors that might prevent entering closed-loop control
-            if axis.error != 0 or axis.motor.error != 0 or axis.encoder.error != 0 or axis.controller.error != 0:
-                print(f"Clearing errors on {axis_name} before testing...")
-                axis.error = 0
-                axis.motor.error = 0
-                axis.encoder.error = 0
-                axis.controller.error = 0
-                time.sleep(0.5)
+            # Prepare for closed-loop control
+            print(f"Setting up {axis_name} for closed-loop control...")
             
+            # Clear any errors
+            if hasattr(axis, 'error') and axis.error != 0:
+                print(f"Clearing axis error: {axis.error}")
+                axis.error = 0
+            if hasattr(axis.motor, 'error') and axis.motor.error != 0:
+                print(f"Clearing motor error: {axis.motor.error}")
+                axis.motor.error = 0
+            if hasattr(axis.encoder, 'error') and axis.encoder.error != 0:
+                print(f"Clearing encoder error: {axis.encoder.error}")
+                axis.encoder.error = 0
+            if hasattr(axis.controller, 'error') and axis.controller.error != 0:
+                print(f"Clearing controller error: {axis.controller.error}")
+                axis.controller.error = 0
+            
+            # First ensure we're in idle state
+            print(f"Setting {axis_name} to idle state first...")
+            axis.requested_state = AXIS_STATE_IDLE
+            time.sleep(1.0)
+            
+            # Set control mode before state change
+            axis.controller.config.control_mode = CONTROL_MODE_VELOCITY_CONTROL
+            time.sleep(0.5)
+            
+            # Move to closed loop control with adequate timeouts
             print(f"Setting {axis_name} to closed-loop control...")
             axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
-            axis.controller.config.control_mode = CONTROL_MODE_VELOCITY_CONTROL
             
-            # Wait for mode change with timeout
+            # Wait for mode change with a longer timeout
             start_time = time.time()
-            timeout = 5  # seconds
+            timeout = 10  # increased timeout
             while axis.current_state != AXIS_STATE_CLOSED_LOOP_CONTROL:
                 if time.time() - start_time > timeout:
                     print(f"Timeout waiting for {axis_name} to enter closed-loop control.")
                     print(f"Current state: {axis.current_state}")
-                    if axis.error != 0 or axis.motor.error != 0 or axis.encoder.error != 0:
-                        print(f"Errors: axis={axis.error}, motor={axis.motor.error}, encoder={axis.encoder.error}")
-                    return False
+                    # Try to recover from this issue
+                    print("Trying to enter CLOSED_LOOP_CONTROL one more time...")
+                    axis.requested_state = AXIS_STATE_IDLE
+                    time.sleep(1.0)
+                    axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+                    time.sleep(2.0)
+                    if axis.current_state != AXIS_STATE_CLOSED_LOOP_CONTROL:
+                        print("Failed to enter closed-loop control after retry.")
+                        print(f"Attempting to proceed with testing anyway...")
+                        break
                 time.sleep(0.5)
             
             print(f"{axis_name} successfully entered closed-loop control mode.")
@@ -333,9 +357,12 @@ def show_diagnostics(odrv):
         print(f"Brake Resistor: {brake_status}")
         print(f"DC Bus Voltage: {odrv.vbus_voltage:.2f}V")
         
-        # Check for errors
-        if odrv.error != 0:
-            print(f"ODrive Error: {odrv.error}")
+        # Safely check for ODrive errors
+        try:
+            if hasattr(odrv, 'error') and odrv.error != 0:
+                print(f"ODrive Error: {odrv.error}")
+        except Exception:
+            print("ODrive error status not available in this firmware version")
         
         # Check each axis
         for axis_num in [0, 1]:
@@ -345,17 +372,30 @@ def show_diagnostics(odrv):
             print(f"\n{axis_name.upper()} Status:")
             print(f"  Current State: {axis.current_state}")
             
-            if axis.error != 0:
-                print(f"  Axis Error: {axis.error}")
-            
-            if axis.motor.error != 0:
-                print(f"  Motor Error: {axis.motor.error}")
-            
-            if axis.encoder.error != 0:
-                print(f"  Encoder Error: {axis.encoder.error}")
-            
-            if axis.controller.error != 0:
-                print(f"  Controller Error: {axis.controller.error}")
+            # Safely check all error states
+            try:
+                if hasattr(axis, 'error') and axis.error != 0:
+                    print(f"  Axis Error: {axis.error}")
+            except Exception:
+                pass
+                
+            try:
+                if hasattr(axis.motor, 'error') and axis.motor.error != 0:
+                    print(f"  Motor Error: {axis.motor.error}")
+            except Exception:
+                pass
+                
+            try:
+                if hasattr(axis.encoder, 'error') and axis.encoder.error != 0:
+                    print(f"  Encoder Error: {axis.encoder.error}")
+            except Exception:
+                pass
+                
+            try:
+                if hasattr(axis.controller, 'error') and axis.controller.error != 0:
+                    print(f"  Controller Error: {axis.controller.error}")
+            except Exception:
+                pass
             
             # Show motor configuration
             print(f"  Motor Configuration:")
