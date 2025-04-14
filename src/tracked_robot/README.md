@@ -1,102 +1,71 @@
-# Autonomous Tracked Robot with NVIDIA Isaac Perceptor
+# ODrive ROS 2 Differential Drive Control
 
-This ROS2 package implements an autonomous tracked robot (dimensions: 780x1015x720 mm - W,L,H) with capabilities for 3D mapping, navigation, obstacle avoidance, and auto-docking using NVIDIA Isaac ROS Perceptor and ZED 2i camera.
+This package provides a complete solution for controlling ODrive-powered differential drive robots with ROS 2.
 
-## Hardware Components
+## Setup
 
-- **Robot Base**: Custom tracked platform (dimensions: 780x1015x720 mm)
-- **Motors**: Two 1kW BLDC motors in differential drive configuration
-- **Motor Controller**: ODrive controller
-- **Computer**: NVIDIA Jetson Orin NX
-- **Sensors**: ZED 2i Camera (with depth and tracking)
-- **Auto-docking**: IR sensors for docking detection
-
-## Software Architecture
-
-The software stack is built on top of ROS2 and NVIDIA Isaac ROS, providing:
-
-- Advanced perception using NVIDIA Isaac Perceptor
-- Real-time 3D mapping and localization
-- Autonomous navigation with dynamic obstacle avoidance
-- Auto-docking capabilities
-
-### Key Components
-
-1. **Robot Control**: Interface with ODrive for differential-drive control
-2. **3D Perception**: Integration with ZED 2i and NVIDIA Isaac for 3D mapping
-3. **Autonomous Navigation**: Nav2-based path planning and execution
-4. **Auto-Docking**: Custom implementation for finding and docking to charging station
-
-## Building and Running
-
-### Prerequisites
-
-- ROS2 Humble or later
-- NVIDIA Isaac ROS Perceptor (from https://nvidia-isaac-ros.github.io/reference_workflows/isaac_perceptor/index.html)
-- ZED SDK and ROS2 wrapper (https://github.com/stereolabs/zed-ros2-wrapper)
-- ODrive Python library (`pip install odrive`)
-
-### Building
-
-Clone this repository to your ROS2 workspace:
-
+1. Install the udev rules for ODrive:
 ```bash
-# Inside your ROS2 workspace
-colcon build --symlink-install --packages-select tracked_robot tracked_robot_msgs
+python3 src/tracked_robot/scripts/setup_odrive.py
 ```
 
-### Running the Robot
+2. Test direct motor control (no encoder required):
+```bash
+python3 src/tracked_robot/scripts/direct_current_control.py --axis 0
+```
 
-1. **Basic robot control and visualization**:
+3. Calibrate motors (if needed):
+```bash
+python3 src/tracked_robot/scripts/all_in_one_calibration.py --axis 0
+```
+
+## Scripts
+
+### Motor Setup and Testing
+- **setup_odrive.py**: Sets up permissions and tests basic functionality
+- **direct_current_control.py**: Control motors directly with current commands (works even with uncalibrated encoders)
+- **all_in_one_calibration.py**: Complete calibration script with error handling
+- **improved_hall_calibration.py**: Specialized Hall sensor calibration
+- **force_velocity_test.py**: Test velocity control with minimal calibration
+
+### ROS 2 Integration
+- **ros2_diff_drive.py**: The main ROS 2 node for controlling your differential drive robot
+
+## Using the ROS 2 Node
+
+The `ros2_diff_drive.py` script can be run in two modes:
+
+### Standalone Mode (without ROS)
+```bash
+python3 src/tracked_robot/scripts/ros2_diff_drive.py --standalone --left_axis 0 --right_axis 1
+```
+This allows you to test the motors with keyboard controls.
+
+### ROS 2 Mode
+```bash
+# In your ROS 2 workspace after building and sourcing
+ros2 run tracked_robot ros2_diff_drive.py
+```
+
+## Troubleshooting
+
+### Motors Not Moving
+If your motors are not moving, try these steps:
+
+1. Check power connections (48V) to the motors
+2. Verify motor phases are correctly connected to ODrive
+3. Try direct current control with higher current values:
    ```bash
-   ros2 launch tracked_robot tracked_robot.launch.py
+   python3 src/tracked_robot/scripts/direct_current_control.py --axis 0
    ```
+   Enter values like 2.0 or 3.0 to apply more current
 
-2. **Navigation with NVIDIA Isaac Perceptor**:
-   ```bash
-   ros2 launch tracked_robot navigation.launch.py
-   ```
+4. Check for errors when attempting to enter closed loop control
+5. Make sure the motor was successfully calibrated
 
-3. **Auto-docking service**:
-   ```bash
-   # After navigation is running, trigger docking with:
-   ros2 service call /dock/start std_srvs/srv/Trigger
-   ```
-
-## Key Nodes
-
-- **odrive_control_node.py**: Interface with ODrive motor controller
-- **auto_docking_node.py**: Handles docking sequence using IR sensors
-
-## Configuration Files
-
-- **zed2i.yaml**: ZED camera configuration
-- **nav2_params.yaml**: Navigation stack parameters
-- **slam_toolbox_params.yaml**: SLAM configuration
-
-## Features
-
-- **Real-time 3D Mapping**: Creates and updates 3D maps of the environment using ZED camera and NVIDIA Isaac SDK
-- **Obstacle Avoidance**: Detects and avoids static and dynamic obstacles during navigation
-- **Auto-Docking**: Autonomously locates and docks with charging station
-- **Robust Navigation**: Handles varied terrain with tracked design and powerful motors
-
-## Limitations and Future Work
-
-- Currently requires calibration for each new environment
-- Auto-docking IR sensor has limited range, future versions may use visual markers
-- Adding integration with ROS2 Control for more standardized motor control
-- Adding support for remote teleoperation
-
-## Customizing the Robot
-
-The physical parameters can be adjusted in `urdf/tracked_robot_properties.xacro`:
-- Robot dimensions
-- Motor power
-- Wheel and track properties
-
-Navigation parameters can be tuned in `config/nav2_params.yaml`.
-
-## License
-
-Apache License 2.0
+### Permission Issues
+If you see "Device permissions are not set up", run:
+```bash
+sudo bash -c "curl https://cdn.odriverobotics.com/files/odrive-udev-rules.rules > /etc/udev/rules.d/91-odrive.rules && udevadm control --reload-rules && udevadm trigger"
+```
+Then log out and log back in, or try reconnecting the ODrive USB cable.
