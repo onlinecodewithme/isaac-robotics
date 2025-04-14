@@ -61,7 +61,18 @@ def configure_odrive_for_bldc_motors(odrv, config):
         axis.motor.config.current_control_bandwidth = config['current_bandwidth']
         axis.motor.config.torque_constant = config['torque_constant']
         
-        # Current limits
+        # Resistance and inductance calibration settings
+        if hasattr(axis.motor.config, 'calibration_current'):
+            axis.motor.config.calibration_current = config['calibration_current']
+        
+        # Pre-calibrated parameters (if available)
+        if config['pre_calibrated'] and hasattr(axis.motor.config, 'phase_resistance'):
+            print(f"Setting pre-calibrated motor parameters for {axis_name}...")
+            axis.motor.config.phase_resistance = config['phase_resistance']
+            if hasattr(axis.motor.config, 'phase_inductance'):
+                axis.motor.config.phase_inductance = config['phase_inductance']
+        
+        # Current limits - more conservative for better reliability
         axis.motor.config.current_lim = config['current_limit']
         axis.motor.config.current_lim_margin = config['current_margin']
         
@@ -145,19 +156,72 @@ def calibrate_motors(odrv):
             axis_name = f"axis{axis_num}"
             axis = getattr(odrv, axis_name)
             
+            # Clear any previous errors before starting
+            if hasattr(axis, 'error'):
+                axis.error = 0
+            if hasattr(axis.motor, 'error'):
+                axis.motor.error = 0
+            if hasattr(axis.encoder, 'error'):
+                axis.encoder.error = 0
+            if hasattr(axis.controller, 'error'):
+                axis.controller.error = 0
+            
+            # Motor calibration with retry logic
             print(f"\nCalibrating {axis_name}...")
-            axis.requested_state = AXIS_STATE_MOTOR_CALIBRATION
+            max_attempts = 3
             
-            # Wait for calibration to complete
-            print("Waiting for motor calibration to complete...")
-            while axis.current_state != AXIS_STATE_IDLE:
-                time.sleep(0.1)
+            for attempt in range(1, max_attempts + 1):
+                print(f"Motor calibration attempt {attempt}/{max_attempts}...")
+                # First ensure we're in idle state
+                axis.requested_state = AXIS_STATE_IDLE
+                time.sleep(1.0)
+                
+                # Start calibration
+                axis.requested_state = AXIS_STATE_MOTOR_CALIBRATION
+                
+                # Wait for calibration to complete with timeout
+                start_time = time.time()
+                timeout = 20  # seconds
+                print("Waiting for motor calibration to complete...")
+                
+                while axis.current_state != AXIS_STATE_IDLE:
+                    if time.time() - start_time > timeout:
+                        print(f"Timeout waiting for calibration. Canceling this attempt.")
+                        axis.requested_state = AXIS_STATE_IDLE
+                        time.sleep(2.0)
+                        break
+                    time.sleep(0.5)
+                
+                # Check if calibration was successful
+                if axis.motor.error == 0:
+                    print(f"Motor calibration for {axis_name} successful.")
+                    break
+                else:
+                    error_code = axis.motor.error
+                    print(f"Motor calibration failed with error: {error_code}")
+                    
+                    # Error 1 is often resistance/inductance measurement issue
+                    if error_code == 1 and attempt < max_attempts:
+                        print("This appears to be a resistance measurement issue.")
+                        print("Clearing error and adjusting parameters for retry...")
+                        axis.motor.error = 0
+                        
+                        # Slightly adjust calibration parameters and try again
+                        if hasattr(axis.motor.config, 'resistance_calib_max_voltage'):
+                            current_voltage = axis.motor.config.resistance_calib_max_voltage
+                            axis.motor.config.resistance_calib_max_voltage = current_voltage * 1.2
+                            print(f"Increased calibration voltage to {axis.motor.config.resistance_calib_max_voltage:.1f}V")
+                        
+                        time.sleep(2.0)
+                    else:
+                        if attempt == max_attempts:
+                            print(f"Failed all {max_attempts} attempts at motor calibration.")
+                            return False
             
+            # If we get here and motor.error is not 0, calibration failed
             if axis.motor.error != 0:
-                print(f"Motor calibration failed with error: {axis.motor.error}")
+                print(f"Motor calibration for {axis_name} ultimately failed.")
                 return False
-            
-            print(f"Motor calibration for {axis_name} successful.")
             
             # Improved Hall sensor calibration sequence
             print(f"Clearing any previous encoder errors for {axis_name}...")
@@ -235,49 +299,68 @@ def test_motors(odrv):
                 print(f"Clearing controller error: {axis.controller.error}")
                 axis.controller.error = 0
             
-            # First ensure we're in idle state
+            # Set to IDLE state first
             print(f"Setting {axis_name} to idle state first...")
             axis.requested_state = AXIS_STATE_IDLE
             time.sleep(1.0)
             
-            # Set control mode before state change
-            axis.controller.config.control_mode = CONTROL_MODE_VELOCITY_CONTROL
+            # Try current control mode instead of velocity control
+            print(f"Setting {axis_name} to current control mode...")
+            axis.controller.config.control_mode = CONTROL_MODE_TORQUE_CONTROL
             time.sleep(0.5)
             
-            # Move to closed loop control with adequate timeouts
+            # Move to closed loop control
             print(f"Setting {axis_name} to closed-loop control...")
             axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
             
-            # Wait for mode change with a longer timeout
+            # Wait for mode change with timeout
             start_time = time.time()
-            timeout = 10  # increased timeout
+            timeout = 10  # seconds
             while axis.current_state != AXIS_STATE_CLOSED_LOOP_CONTROL:
                 if time.time() - start_time > timeout:
                     print(f"Timeout waiting for {axis_name} to enter closed-loop control.")
                     print(f"Current state: {axis.current_state}")
-                    # Try to recover from this issue
-                    print("Trying to enter CLOSED_LOOP_CONTROL one more time...")
+                    # Try to recover
+                    print("Attempting recovery procedure...")
+                    
+                    # Clear all errors and reset state
+                    if hasattr(axis, 'error'):
+                        axis.error = 0
+                    if hasattr(axis.motor, 'error'):
+                        axis.motor.error = 0
+                    if hasattr(axis.encoder, 'error'):
+                        axis.encoder.error = 0
+                    if hasattr(axis.controller, 'error'):
+                        axis.controller.error = 0
+                    
+                    # Try one more time
                     axis.requested_state = AXIS_STATE_IDLE
-                    time.sleep(1.0)
-                    axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
                     time.sleep(2.0)
+                    
+                    print("Trying to use direct current control instead...")
+                    axis.controller.config.control_mode = CONTROL_MODE_TORQUE_CONTROL
+                    time.sleep(1.0)
+                    
+                    axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+                    time.sleep(3.0)
+                    
                     if axis.current_state != AXIS_STATE_CLOSED_LOOP_CONTROL:
-                        print("Failed to enter closed-loop control after retry.")
-                        print(f"Attempting to proceed with testing anyway...")
-                        break
+                        print(f"Unable to enter closed-loop control with {axis_name}.")
+                        print("Will attempt to test anyway, but motors may not move.")
+                    break
                 time.sleep(0.5)
-            
-            print(f"{axis_name} successfully entered closed-loop control mode.")
         
-        # Simple sequence: forward, stop, reverse, stop
+        # Simple torque-based test sequence 
         test_sequence = [
-            {"name": "Forward", "left": 1.0, "right": 1.0, "duration": 2.0},
+            {"name": "Forward (low torque)", "left": 0.2, "right": 0.2, "duration": 2.0},
             {"name": "Stop", "left": 0.0, "right": 0.0, "duration": 1.0},
-            {"name": "Turn Right", "left": 1.0, "right": -1.0, "duration": 2.0},
+            {"name": "Forward (medium torque)", "left": 0.5, "right": 0.5, "duration": 2.0},
             {"name": "Stop", "left": 0.0, "right": 0.0, "duration": 1.0},
-            {"name": "Turn Left", "left": -1.0, "right": 1.0, "duration": 2.0},
+            {"name": "Turn Right", "left": 0.3, "right": -0.3, "duration": 2.0},
             {"name": "Stop", "left": 0.0, "right": 0.0, "duration": 1.0},
-            {"name": "Reverse", "left": -1.0, "right": -1.0, "duration": 2.0},
+            {"name": "Turn Left", "left": -0.3, "right": 0.3, "duration": 2.0},
+            {"name": "Stop", "left": 0.0, "right": 0.0, "duration": 1.0},
+            {"name": "Reverse", "left": -0.3, "right": -0.3, "duration": 2.0},
             {"name": "Stop", "left": 0.0, "right": 0.0, "duration": 1.0},
         ]
         
@@ -285,9 +368,16 @@ def test_motors(odrv):
         for step in test_sequence:
             print(f"\nTesting: {step['name']}")
             
-            # Send commands to both motors
-            odrv.axis0.controller.input_vel = step['left']
-            odrv.axis1.controller.input_vel = step['right']
+            # Send torque commands to both motors
+            if odrv.axis0.controller.config.control_mode == CONTROL_MODE_VELOCITY_CONTROL:
+                odrv.axis0.controller.input_vel = step['left'] * 10  # Higher values for velocity control
+                odrv.axis1.controller.input_vel = step['right'] * 10
+                print(f"Setting velocity: Left={step['left']*10:.1f}, Right={step['right']*10:.1f}")
+            else:
+                # Use torque control
+                odrv.axis0.controller.input_torque = step['left']
+                odrv.axis1.controller.input_torque = step['right']
+                print(f"Setting torque: Left={step['left']:.1f}, Right={step['right']:.1f}")
             
             # Wait for specified duration
             for i in range(int(step['duration'] * 10)):
@@ -427,19 +517,23 @@ def main():
     parser.add_argument('--diag-only', action='store_true', help='Run diagnostics only')
     args = parser.parse_args()
     
-    # Default configuration for 1kW BLDC motors - adjusted for Hall sensors
+    # Default configuration for 1kW BLDC motors - optimized for reliable operation
     default_config = {
         'pole_pairs': 7,                # Motor pole pairs (adjust for your motors)
-        'calib_voltage': 8.0,           # Lower calibration voltage for safer operation
-        'current_range': 90.0,          # Amperes
+        'calib_voltage': 10.0,          # Calibration voltage - increased for better calibration
+        'current_range': 60.0,          # Reduced from 90A for safer operation
         'current_bandwidth': 100.0,     # Hz
-        'torque_constant': 8.27 / 16,   # Nm/A, initial guess, determined during calibration
-        'current_limit': 60.0,          # Amperes
-        'current_margin': 5.0,          # Amperes
-        'encoder_cpr': 6,               # For Hall sensors, this should be 6 (3 hall sensors * 2)
-        'velocity_limit': 20.0,         # turns/s
-        'velocity_gain': 0.01,          # (Nm/rad/s) / (turn/s)
+        'calibration_current': 10.0,    # Lower calibration current
+        'torque_constant': 8.27 / 16,   # Nm/A, initial guess
+        'current_limit': 40.0,          # Reduced from 60A for safer operation
+        'current_margin': 10.0,         # Increased margin for better protection
+        'encoder_cpr': 6,               # For Hall sensors: 3 sensors * 2 states
+        'velocity_limit': 10.0,         # Reduced from 20 turns/s for safer testing
+        'velocity_gain': 0.02,          # Increased gain for better response
         'brake_resistance': 0.5,        # Ohms (0 to disable)
+        'pre_calibrated': False,        # Enable to use pre-calibrated values
+        'phase_resistance': 0.1,        # Pre-calibrated value (ohms) - enable if known
+        'phase_inductance': 0.00005,    # Pre-calibrated value (henries) - enable if known
     }
     
     print("ODrive Setup for Advanced Tracked Robot")
