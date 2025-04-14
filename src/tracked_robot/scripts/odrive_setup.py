@@ -286,8 +286,43 @@ def calibrate_motors(odrv):
         print(f"\nCalibration failed: {str(e)}")
         return False
 
+def configure_for_direct_drive(odrv):
+    """Configure specific parameters for direct drive operation"""
+    print("\n--- Configuring for Direct Drive Operation ---")
+    
+    for axis_num in [0, 1]:
+        axis_name = f"axis{axis_num}"
+        axis = getattr(odrv, axis_name)
+        
+        print(f"Setting direct drive parameters for {axis_name}...")
+        
+        # Reset errors
+        axis.error = 0
+        axis.motor.error = 0
+        axis.controller.error = 0
+        
+        # Set to much higher current for starting from standstill
+        axis.motor.config.current_lim = 60.0
+        
+        # Try to set motor phase resistance directly
+        if hasattr(axis.motor.config, 'phase_resistance'):
+            axis.motor.config.phase_resistance = 0.1  # Typical for 1kW motor
+        
+        # Configure velocity control
+        axis.controller.config.control_mode = CONTROL_MODE_VELOCITY_CONTROL
+        axis.controller.config.vel_limit = 100.0  # Allow high limit for startup
+        axis.controller.config.vel_ramp_rate = 10.0  # Ramp rate in turns/s^2
+        
+        # Set motor type
+        axis.motor.config.motor_type = MOTOR_TYPE_HIGH_CURRENT
+        
+        # Save configuration
+        odrv.save_configuration()
+        
+    print("Direct drive configuration complete.")
+
 def try_sensorless_mode(axis, axis_name):
-    """Try to run the motor in sensorless mode since Hall sensors are problematic"""
+    """Try to run the motor in sensorless mode with optimized parameters"""
     print(f"\nTrying sensorless mode for {axis_name}...")
     
     # Clear all errors first
@@ -307,40 +342,81 @@ def try_sensorless_mode(axis, axis_name):
     axis.requested_state = AXIS_STATE_IDLE
     time.sleep(1.0)
     
-    # Configure for sensorless mode
-    print(f"Configuring for sensorless ramp mode...")
+    # Configure for sensorless mode with stronger parameters
+    print(f"Configuring advanced sensorless parameters...")
+    
+    # Set control mode to velocity control
     axis.controller.config.control_mode = CONTROL_MODE_VELOCITY_CONTROL
     
-    # Configure sensorless mode params if available
+    # Configure sensorless estimator parameters
     try:
+        # These parameters need to be properly tuned for 48V motors
         if hasattr(axis.sensorless_estimator.config, 'pm_flux_linkage'):
-            axis.sensorless_estimator.config.pm_flux_linkage = 5e-3  # typical for 48V motors
-        if hasattr(axis.motor.config, 'motor_type'):
-            axis.motor.config.motor_type = MOTOR_TYPE_HIGH_CURRENT
+            axis.sensorless_estimator.config.pm_flux_linkage = 0.01  # Increased for 48V motors
         
-        # These settings are specific to sensorless startup
+        # Configure ramping parameters for stronger startup
+        if hasattr(axis.controller.config, 'vel_ramp_rate'):
+            axis.controller.config.vel_ramp_rate = 1.0  # Slower for reliable startup
+            print(f"  Set velocity ramp rate to {axis.controller.config.vel_ramp_rate}")
+        
+        # Controller gains for sensorless operation
         if hasattr(axis.controller.config, 'vel_gain'):
-            axis.controller.config.vel_gain = 0.01
+            axis.controller.config.vel_gain = 0.025  # Increased gain
+            print(f"  Set velocity gain to {axis.controller.config.vel_gain}")
         if hasattr(axis.controller.config, 'vel_integrator_gain'):
-            axis.controller.config.vel_integrator_gain = 0.05
-    except:
-        print("Some sensorless parameters couldn't be configured")
+            axis.controller.config.vel_integrator_gain = 0.1  # Higher integrator gain
+            print(f"  Set velocity integrator gain to {axis.controller.config.vel_integrator_gain}")
+            
+        # Direct motor control settings
+        axis.motor.config.current_lim = 60.0  # Much higher current for starting motion
+        print(f"  Set current limit to {axis.motor.config.current_lim}A")
+    except Exception as e:
+        print(f"  Warning: Some sensorless parameters couldn't be configured: {e}")
     
-    # Try to use sensorless ramp - works better with Hall issues
+    # Try to use sensorless ramp - with stronger settings
     print(f"Attempting to enter sensorless ramp mode...")
     try:
         axis.requested_state = AXIS_STATE_SENSORLESS_CONTROL
-        time.sleep(2.0)
+        time.sleep(3.0)  # Give it more time to initialize
         
         # Check if successful
         if axis.current_state == AXIS_STATE_SENSORLESS_CONTROL:
             print(f"Successfully entered sensorless control mode with {axis_name}!")
+            
+            # Test the motor with a small movement to verify 
+            print(f"Testing motor with a small movement...")
+            axis.controller.input_vel = 5.0  # Higher starting velocity
+            time.sleep(1.0)
+            
+            # Check if current is flowing
+            current = axis.motor.current_control.Iq_measured
+            if abs(current) > 1.0:
+                print(f"Motor current detected: {current:.2f}A - motor should be active")
+            else:
+                print(f"Low motor current detected: {current:.2f}A - motor may not be moving")
+            
+            # Stop the test movement
+            axis.controller.input_vel = 0.0
+            time.sleep(0.5)
+            
             return True
         else:
             print(f"Failed to enter sensorless control mode with {axis_name}.")
             print(f"Current state: {axis.current_state}")
             if hasattr(axis, 'error') and axis.error != 0:
-                print(f"Axis error: {axis.error}")
+                error_code = axis.error
+                print(f"Axis error: {error_code}")
+                
+                # Common sensorless error diagnostics
+                if error_code == 40:
+                    print("  Error 40: Sensorless estimator failed")
+                    print("  This often happens when the motor is not correctly parametrized")
+                    print("  Check motor wiring and try increasing current_lim and flux linkage")
+                    
+                elif error_code & 512:  # Check for error bit 512
+                    print("  Error 512: Motor didn't move properly.")
+                    print("  This could be due to insufficient current or mechanical blockage")
+                
             return False
     except Exception as e:
         print(f"Error entering sensorless mode: {e}")
@@ -354,48 +430,78 @@ def test_motors(odrv):
     input("Press Enter to continue with testing or Ctrl+C to cancel...")
     
     try:
-        # First try with direct manual control (no closed loop)
-        print("\nTrying direct motor control first...")
+        # Configure for direct drive operation
+        configure_for_direct_drive(odrv)
+        
+        print("\nPreparing motors for direct control...")
         
         for axis_num in [0, 1]:
             axis_name = f"axis{axis_num}"
             axis = getattr(odrv, axis_name)
             
-            # Clear any errors
-            if hasattr(axis, 'error') and axis.error != 0:
-                print(f"Clearing axis error: {axis.error}")
-                axis.error = 0
-            if hasattr(axis.motor, 'error') and axis.motor.error != 0:
-                print(f"Clearing motor error: {axis.motor.error}")
-                axis.motor.error = 0
-            if hasattr(axis.encoder, 'error') and axis.encoder.error != 0:
-                print(f"Clearing encoder error: {axis.encoder.error}")
-                axis.encoder.error = 0
-                
-            # Reset states
+            # Make sure motors are set to idle and errors cleared
+            print(f"Setting {axis_name} to idle state and clearing errors...")
             axis.requested_state = AXIS_STATE_IDLE
-            time.sleep(1.0)
+            time.sleep(0.5)
             
-        # Try sensorless mode for more direct control
+            # Clear all errors
+            if hasattr(axis, 'error'):
+                axis.error = 0
+            if hasattr(axis.motor, 'error'):
+                axis.motor.error = 0
+            if hasattr(axis.encoder, 'error'):
+                axis.encoder.error = 0
+            if hasattr(axis.controller, 'error'):
+                axis.controller.error = 0
+        
+        # Try stronger sensorless mode for both motors
+        print("\nAttempting alternative startup method...")
         axis0_ok = try_sensorless_mode(odrv.axis0, "axis0")
         axis1_ok = try_sensorless_mode(odrv.axis1, "axis1")
         
+        # Very aggressive test sequence for high torque motors
         if not (axis0_ok or axis1_ok):
-            print("Neither axis could enter sensorless mode. Testing will likely fail.")
-            print("Proceeding with testing anyway...")
+            print("Neither axis could enter sensorless mode. Will try one more approach...")
+            print("Setting up for direct current control...")
+            
+            # Try to set up voltage control mode (firmware dependent)
+            try:
+                for axis_num in [0, 1]:
+                    axis_name = f"axis{axis_num}"
+                    axis = getattr(odrv, axis_name)
+                    
+                    # Reset to IDLE state
+                    axis.requested_state = AXIS_STATE_IDLE
+                    time.sleep(1.0)
+                    
+                    # Try voltage control mode if available
+                    if hasattr(axis.controller.config, 'control_mode'):
+                        print(f"Setting {axis_name} to direct current control...")
+                        axis.controller.config.control_mode = CONTROL_MODE_TORQUE_CONTROL
+                        time.sleep(0.5)
+                        
+                        # Try to set to closed loop control
+                        axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+                        time.sleep(2.0)
+                        
+                        if axis.current_state == AXIS_STATE_CLOSED_LOOP_CONTROL:
+                            print(f"Successfully entered closed-loop control with {axis_name}!")
+                            if axis_num == 0:
+                                axis0_ok = True
+                            else:
+                                axis1_ok = True
+                        else:
+                            print(f"Failed to enter closed-loop control with {axis_name}.")
+            except Exception as e:
+                print(f"Error during alternative setup: {e}")
 
-        # Test sequence specifically for sensorless mode
-        # Start with low speeds to allow the estimator to lock on
+        # Test sequence with much higher currents and slower progression for 1000W motors
         test_sequence = [
-            {"name": "Initial Forward (very low)", "left": 2.0, "right": 2.0, "duration": 3.0},
+            {"name": "Initial Forward (very low)", "left": 20.0, "right": 20.0, "duration": 3.0},
             {"name": "Stop", "left": 0.0, "right": 0.0, "duration": 1.0},
-            {"name": "Forward (low)", "left": 4.0, "right": 4.0, "duration": 2.0},
-            {"name": "Stop", "left": 0.0, "right": 0.0, "duration": 1.0},
-            {"name": "Forward (medium)", "left": 7.0, "right": 7.0, "duration": 2.0},
-            {"name": "Stop", "left": 0.0, "right": 0.0, "duration": 1.0},
-            {"name": "Forward (high)", "left": 10.0, "right": 10.0, "duration": 2.0},
-            {"name": "Stop", "left": 0.0, "right": 0.0, "duration": 1.0},
-            {"name": "Reverse (low)", "left": -4.0, "right": -4.0, "duration": 2.0},
+            {"name": "Forward (medium)", "left": 40.0, "right": 40.0, "duration": 2.0},
+            {"name": "Stop", "left": 0.0, "right": 0.0, "duration": 1.0}, 
+            {"name": "Reverse (low)", "left": -20.0, "right": -20.0, "duration": 2.0},
             {"name": "Stop", "left": 0.0, "right": 0.0, "duration": 1.0},
         ]
 
@@ -556,24 +662,24 @@ def main():
     args = parser.parse_args()
     
     # Configuration optimized for 48V 1000W BLDC motors with 53V battery
-    # Using sensorless control instead of Hall sensors
+    # Using very aggressive settings for direct drive
     default_config = {
         'pole_pairs': 7,                # Motor pole pairs (common for 1kW BLDC)
         'calib_voltage': 20.0,          # Higher voltage needed for reliable calibration
-        'current_range': 60.0,          # For 1000W / 48V ≈ 21A, add margin
+        'current_range': 80.0,          # Much higher for 1000W motors
         'current_bandwidth': 100.0,     # Hz
         'calibration_current': 15.0,    # Higher calibration current for 1kW motors
         'torque_constant': 8.27 / 16,   # Nm/A, initial value
-        'current_limit': 30.0,          # Lower for initial testing for safety
+        'current_limit': 60.0,          # Much higher current to start heavy motors
         'current_margin': 15.0,         # Increased margin for better protection
-        'encoder_cpr': 6,               # Not important in sensorless mode, but keep for Hall
-        'velocity_limit': 20.0,         # Higher limit for 1kW motors
-        'velocity_gain': 0.005,         # Lower gain for stability when using sensorless
+        'encoder_cpr': 6,               # For Hall encoders
+        'velocity_limit': 100.0,        # Much higher limit to overcome startup issues
+        'velocity_gain': 0.03,          # Higher gain for more aggressive response
         'brake_resistance': 0.5,        # Ohms (0 to disable)
         'pre_calibrated': True,         # Use pre-calibrated values for better startup
-        'phase_resistance': 0.1,        # Typical phase resistance for 48V 1kW BLDC (lower estimate)
+        'phase_resistance': 0.1,        # Typical phase resistance for 48V 1kW BLDC
         'phase_inductance': 0.0001,     # Typical phase inductance for similar motors
-        'overvoltage_trip_level': 65.0, # Set higher for 53V battery (default is often 56V)
+        'overvoltage_trip_level': 65.0, # Set higher for 53V battery
     }
     
     print("ODrive Setup for Advanced Tracked Robot")
