@@ -165,11 +165,96 @@ except Exception as e:
 """
     return run_command(command)
 
+def decode_encoder_error(error_code):
+    """Decode ODrive encoder error codes"""
+    errors = []
+    if error_code & 0x01:
+        errors.append("ERROR_UNSTABLE_GAIN")
+    if error_code & 0x02:
+        errors.append("ERROR_CPR_POLEPAIRS_MISMATCH")
+    if error_code & 0x04:
+        errors.append("ERROR_NO_RESPONSE")
+    if error_code & 0x08:
+        errors.append("ERROR_UNSUPPORTED_ENCODER_MODE")
+    if error_code & 0x10:
+        errors.append("ERROR_ILLEGAL_HALL_STATE")
+    if error_code & 0x20:
+        errors.append("ERROR_INDEX_NOT_FOUND_YET")
+    if error_code & 0x40:
+        errors.append("ERROR_ABS_SPI_TIMEOUT")
+    if error_code & 0x80:
+        errors.append("ERROR_ABS_SPI_COM_FAIL")
+    if error_code & 0x100:
+        errors.append("ERROR_ABS_SPI_NOT_READY")
+    if error_code & 0x200:
+        errors.append("ERROR_HALL_NOT_CALIBRATED_YET")
+    
+    return errors if errors else ["UNKNOWN_ERROR"]
+
 def perform_encoder_calibration(axis_num, is_hall=True):
-    """Perform encoder calibration in a separate process"""
+    """Perform encoder calibration in a separate process with special handling for Hall sensors"""
     state = "AXIS_STATE_ENCODER_HALL_POLARITY_CALIBRATION" if is_hall else "AXIS_STATE_ENCODER_OFFSET_CALIBRATION"
     state_desc = "Hall sensor" if is_hall else "encoder offset"
     
+    # Try manual Hall calibration first, which can be more reliable
+    if is_hall:
+        print("First attempting to manually calibrate Hall sensors...")
+        manual_command = """
+import odrive
+import time
+from odrive.enums import *
+try:
+    odrv = odrive.find_any(timeout=10)
+    print(f"Connected to ODrive {odrv.serial_number}")
+    axis = getattr(odrv, f"axis""" + str(axis_num) + """")
+    
+    # First verify pole pairs match CPR configuration
+    pp = axis.motor.config.pole_pairs
+    cpr = axis.encoder.config.cpr
+    
+    if cpr != pp * 6:
+        print(f"Fixing CPR: was {cpr}, should be {pp * 6}")
+        axis.encoder.config.cpr = pp * 6
+        odrv.save_configuration()
+        print("Configuration saved, will reconnect...")
+        time.sleep(3.0)
+        
+        # Reconnect after potential reset
+        odrv = odrive.find_any(timeout=10)
+        axis = getattr(odrv, f"axis""" + str(axis_num) + """")
+    
+    # Clear any errors
+    if hasattr(axis, 'error'):
+        axis.error = 0
+    if hasattr(axis.encoder, 'error'):
+        axis.encoder.error = 0
+    
+    print("Checking if Hall sensors are working...")
+    
+    # Try to read Hall state to check if sensors are connected
+    if hasattr(axis.encoder, 'hall_state'):
+        initial_state = axis.encoder.hall_state
+        print(f"Hall state: {initial_state}")
+        
+        # Valid Hall states are 1-6 (000 and 111 are invalid)
+        if initial_state < 1 or initial_state > 6:
+            print(f"WARNING: Invalid Hall state detected: {initial_state}")
+            print("Hall sensors may be disconnected or wired incorrectly")
+            exit(1)
+        
+        print("Hall sensors appear to be working.")
+        print("You should try using the advanced_motor_test.py script now.")
+        exit(0)
+    else:
+        print("Could not read Hall state, continuing with standard calibration.")
+        exit(1)
+except Exception as e:
+    print(f"Error during manual Hall check: {e}")
+    exit(1)
+"""
+        run_command(manual_command)
+    
+    # If manual check didn't exit with success, proceed with automatic calibration
     command = """
 import odrive
 import time
@@ -226,7 +311,25 @@ try:
     else:
         print("Encoder calibration failed")
         if hasattr(axis.encoder, 'error'):
-            print(f"Encoder error: {axis.encoder.error}")
+            error_code = axis.encoder.error
+            print(f"Encoder error: {error_code}")
+            
+            # Decode error code
+            errors = []
+            if error_code & 0x200:  # ERROR_HALL_NOT_CALIBRATED_YET
+                errors.append("ERROR_HALL_NOT_CALIBRATED_YET - Make sure encoder and motor are properly connected")
+            if error_code & 0x10:   # ERROR_ILLEGAL_HALL_STATE
+                errors.append("ERROR_ILLEGAL_HALL_STATE - Hall sensors may be wired incorrectly")
+            if error_code & 0x02:   # ERROR_CPR_POLEPAIRS_MISMATCH
+                errors.append("ERROR_CPR_POLEPAIRS_MISMATCH - CPR should be 6 * pole_pairs")
+            
+            if errors:
+                print("Error details:")
+                for err in errors:
+                    print(f"  - {err}")
+            else:
+                print("Unknown encoder error")
+                
         exit(1)
 except Exception as e:
     print(f"Error: {e}")
