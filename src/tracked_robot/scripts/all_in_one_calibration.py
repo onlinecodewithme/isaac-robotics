@@ -80,13 +80,13 @@ def configure_calibration_parameters(axis):
         axis.motor.config.pole_pairs = 7
         print("✓ Set pole pairs to 7")
         
-        # Current limits for safety
-        axis.motor.config.current_lim = 10.0
-        print("✓ Set current limit to 10.0A")
+        # Current limits for 1000W motors - increased for better calibration success
+        axis.motor.config.current_lim = 25.0
+        print("✓ Set current limit to 25.0A")
         
-        # Calibration current - lower is safer
-        axis.motor.config.calibration_current = 5.0
-        print("✓ Set calibration current to 5.0A")
+        # Calibration current - higher for 1000W motors
+        axis.motor.config.calibration_current = 15.0
+        print("✓ Set calibration current to 15.0A")
         
         # Resistance calibration voltage - lower for safer operation
         axis.motor.config.resistance_calib_max_voltage = 4.0
