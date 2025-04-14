@@ -156,7 +156,7 @@ def check_hall_sensors(axis):
         logger.error(f"Error testing hall sensors: {str(e)}")
         return False
 
-def apply_aggressive_fix(axis, high_current=15.0, attempts=3):
+def apply_aggressive_fix(odrv, axis, axis_num, high_current=15.0, attempts=3):
     """Apply aggressive fix for Error 0x801"""
     logger.info("Applying aggressive fix for Error 0x801...")
     
@@ -209,11 +209,14 @@ def apply_aggressive_fix(axis, high_current=15.0, attempts=3):
                     logger.info("Device reset during save (expected)")
                     time.sleep(5.0)
                     # Reconnect
-                    odrv = connect_to_odrive()
-                    if odrv is None:
+                    new_odrv = connect_to_odrive()
+                    if new_odrv is None:
                         logger.error("Failed to reconnect after save")
                         continue
-                    axis = getattr(odrv, f"axis{axis_num}")
+                    new_axis = getattr(new_odrv, f"axis{axis_num}")
+                    # Update our references
+                    odrv = new_odrv
+                    axis = new_axis
                 else:
                     logger.error(f"Error during save: {str(e)}")
                     continue
@@ -455,7 +458,7 @@ if __name__ == "__main__":
         if choice == '1':
             check_hall_sensors(axis)
         elif choice == '2':
-            apply_aggressive_fix(axis, high_current=max_current)
+            apply_aggressive_fix(odrv, axis, axis_num, high_current=max_current)
             # Reconnect to get fresh state
             odrv = connect_to_odrive()
             if odrv is not None:
