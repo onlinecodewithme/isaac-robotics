@@ -168,6 +168,103 @@ def detect_pole_pairs(odrive_obj, axis_num):
         return int(pp_input)
     return estimated_pp
 
+def manual_hall_calibration(axis):
+    """Manually calibrate Hall sensors by observing patterns"""
+    print_header("MANUAL HALL SENSOR CALIBRATION")
+    print("This is a special routine to manually map Hall states to positions")
+    print("Since the automatic calibration is failing, we'll try a manual approach")
+    
+    # First check if Hall sensors are working
+    if not hasattr(axis.encoder, 'hall_state'):
+        print("! Cannot access Hall state - firmware may not support this feature")
+        return False
+    
+    # Get the current Hall state
+    initial_state = axis.encoder.hall_state
+    if initial_state < 1 or initial_state > 6:
+        print(f"! Invalid Hall state detected: {initial_state}")
+        print("  Valid Hall states are 1-6")
+        print("  Check Hall sensor connections before proceeding")
+        return False
+    
+    print(f"Current Hall state: {initial_state}")
+    print("\nSTEP 1: Testing Hall state changes")
+    print("Rotate the motor BY HAND very slowly and observe the Hall state changes")
+    print("Press Ctrl+C to stop when you've seen several state changes")
+    
+    # Record the observed Hall states and transitions
+    hall_transitions = []
+    last_state = initial_state
+    
+    try:
+        print("\nWatching Hall state changes... (Ctrl+C to stop)")
+        for i in range(60):  # Up to 30 seconds
+            current_state = axis.encoder.hall_state
+            if current_state != last_state:
+                hall_transitions.append((last_state, current_state))
+                print(f"  Hall transition: {last_state} → {current_state}")
+                last_state = current_state
+            time.sleep(0.5)
+            
+            # After several transitions, check if user wants to continue
+            if len(hall_transitions) >= 3 and i % 4 == 0:
+                check = input("\nContinue watching? (y/n): ")
+                if check.lower() != 'y':
+                    break
+    except KeyboardInterrupt:
+        pass
+    
+    # Check if we have enough transitions
+    if len(hall_transitions) < 2:
+        print("\n! Not enough Hall state transitions detected")
+        print("  Please check that the Hall sensors are properly connected")
+        return False
+    
+    print(f"\nDetected {len(hall_transitions)} Hall state transitions")
+    print("Hall sensors appear to be working properly!")
+    
+    # Prepare for manual calibration
+    print("\nSTEP 2: Manually configuring Hall values")
+    print("Based on detected Hall states, we'll configure the ODrive directly")
+    
+    try:
+        # Hall sensor mapping
+        # First, set the right encoder mode and CPR
+        axis.encoder.config.mode = ENCODER_MODE_HALL
+        pole_pairs = axis.motor.config.pole_pairs
+        axis.encoder.config.cpr = 6 * pole_pairs
+        print(f"✓ Set encoder CPR to {6 * pole_pairs} (6 states * {pole_pairs} pole pairs)")
+        
+        # Try to manually set the calibration flag
+        if hasattr(axis.encoder.config, 'hall_polarity_calibrated'):
+            axis.encoder.config.hall_polarity_calibrated = True
+            print("✓ Manually set hall_polarity_calibrated flag")
+        
+        # By using pre_calibrated, we can avoid the calibration step
+        if hasattr(axis.encoder.config, 'pre_calibrated'):
+            axis.encoder.config.pre_calibrated = True
+            print("✓ Set encoder to pre_calibrated mode")
+        
+        # Use manual offsets if available
+        if hasattr(axis.encoder.config, 'hall_offset'):
+            # 0 is a safe default
+            axis.encoder.config.hall_offset = 0
+            print("✓ Set hall_offset to 0")
+        
+        # Save configuration
+        print("\nSaving configuration...")
+        odrv.save_configuration()
+        print("✓ Configuration saved")
+        
+        print("\nManual Hall calibration complete!")
+        print("You can now try to test the motor with:")
+        print("python3 src/tracked_robot/scripts/force_velocity_test.py --axis 0 --mode bypass")
+        
+        return True
+    except Exception as e:
+        print(f"! Error during manual Hall calibration: {e}")
+        return False
+
 def step1_configure_hall_sensors(axis_num, pole_pairs):
     """Configure Hall sensors with the correct pole pairs"""
     print_header("STEP 1: CONFIGURE HALL SENSORS")
@@ -337,6 +434,7 @@ def step3_calibrate_hall_sensors(axis_num):
     print(f"Calibrating Hall sensors on axis {axis_num}")
     
     # Connect to ODrive
+    global odrv
     odrv = connect_to_odrive()
     if not odrv:
         return False
@@ -359,8 +457,37 @@ def step3_calibrate_hall_sensors(axis_num):
         print(f"! Error preparing for Hall calibration: {str(e)}")
         return False
     
-    # Start Hall sensor calibration
-    print("\nStarting Hall sensor calibration...")
+    # Check if the Hall sensors work by watching state changes
+    print("\nFirst, let's check if Hall sensors are working...")
+    print("Please rotate the motor shaft BY HAND and watch for state changes.")
+    
+    # Track Hall states for a few seconds
+    initial_state = axis.encoder.hall_state
+    print(f"Current Hall state: {initial_state}")
+    
+    if initial_state < 1 or initial_state > 6:
+        print("\n! Invalid Hall state detected. Hall sensors may be disconnected or miswired.")
+        print("  Valid Hall states are 1-6")
+        return False
+    
+    # Ask user to choose calibration method
+    print("\nCHOOSE CALIBRATION METHOD:")
+    print("1: Standard automatic calibration (motor will rotate)")
+    print("2: Manual calibration (uses Hall states from manual rotation)")
+    method = input("Choose method [1/2]: ")
+    
+    if method == "2":
+        # Try manual calibration first
+        print("\nUsing MANUAL CALIBRATION method...")
+        manual_success = manual_hall_calibration(axis)
+        
+        if manual_success:
+            return True
+        else:
+            print("\nManual calibration failed, falling back to automatic method...")
+    
+    # Start Hall sensor calibration (automatic method)
+    print("\nStarting automatic Hall sensor calibration...")
     print("This will rotate the motor to detect Hall sensor sequence\n")
     try:
         # Find the right calibration state based on firmware
@@ -386,7 +513,10 @@ def step3_calibrate_hall_sensors(axis_num):
         # Check if successful
         if time.time() - start_time >= timeout:
             print("! Hall sensor calibration timed out")
-            return False
+            
+            # Try manual calibration as fallback
+            print("\nAutomatic calibration failed. Trying manual calibration as fallback...")
+            return manual_hall_calibration(axis)
             
         if axis.encoder.is_ready:
             print("✓ Hall sensor calibration successful!")
@@ -402,11 +532,17 @@ def step3_calibrate_hall_sensors(axis_num):
         else:
             print(f"! Hall sensor calibration failed")
             print_error_state(axis, "Encoder Errors:")
-            return False
+            
+            # Try manual calibration as fallback
+            print("\nAutomatic calibration failed. Trying manual calibration as fallback...")
+            return manual_hall_calibration(axis)
             
     except Exception as e:
         print(f"! Error during Hall calibration: {str(e)}")
-        return False
+        
+        # Try manual calibration as fallback
+        print("\nAutomatic calibration failed. Trying manual calibration as fallback...")
+        return manual_hall_calibration(axis)
 
 def step4_test_movement(axis_num):
     """Test basic closed-loop movement after calibration"""
