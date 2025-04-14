@@ -43,6 +43,98 @@ logging.basicConfig(level=logging.INFO,
                     datefmt='%H:%M:%S')
 logger = logging.getLogger("odrive_diff_drive")
 
+# Only define ROS Node if ROS is available
+if HAS_ROS:
+    class ODriveDiffDriveNode(Node):
+        """ROS 2 Node for ODrive differential drive control"""
+        
+        def __init__(self, left_axis=0, right_axis=1):
+            super().__init__('odrive_diff_drive')
+            self.controller = ODriveController(left_axis, right_axis)
+            self.connected = False
+            self.wheel_radius = 0.1  # Default 10cm - adjust for your robot
+            self.wheel_separation = 0.5  # Default 50cm - adjust for your robot
+            
+            # Get parameters from ROS
+            self.declare_parameter('wheel_radius', self.wheel_radius)
+            self.declare_parameter('wheel_separation', self.wheel_separation)
+            self.wheel_radius = self.get_parameter('wheel_radius').value
+            self.wheel_separation = self.get_parameter('wheel_separation').value
+            
+            # Create subscribers
+            self.cmd_vel_sub = self.create_subscription(
+                Twist, 'cmd_vel', self.cmd_vel_callback, 10)
+            
+            # Create publishers for motor status
+            self.left_vel_pub = self.create_publisher(Float64, 'left_wheel_velocity', 10)
+            self.right_vel_pub = self.create_publisher(Float64, 'right_wheel_velocity', 10)
+            self.connection_pub = self.create_publisher(Bool, 'odrive_connected', 10)
+            
+            # Timer for status updates
+            self.timer = self.create_timer(0.1, self.timer_callback)
+            
+            # Try to connect
+            self.connect()
+            
+            self.get_logger().info("ODrive differential drive node initialized")
+            
+        def connect(self):
+            """Connect to ODrive"""
+            if self.controller.connect():
+                self.connected = True
+                self.get_logger().info("Connected to ODrive")
+            else:
+                self.connected = False
+                self.get_logger().error("Failed to connect to ODrive")
+                
+        def cmd_vel_callback(self, msg):
+            """Handle cmd_vel messages"""
+            if not self.connected:
+                self.get_logger().warning("Ignoring cmd_vel: Not connected to ODrive")
+                return
+            
+            # Convert linear and angular velocity to wheel velocities
+            linear_x = msg.linear.x
+            angular_z = msg.angular.z
+            
+            # Calculate wheel velocities (differential drive kinematics)
+            left_vel = (linear_x - angular_z * self.wheel_separation / 2) / self.wheel_radius
+            right_vel = (linear_x + angular_z * self.wheel_separation / 2) / self.wheel_radius
+            
+            # Send velocities to ODrive
+            if not self.controller.set_velocity(left_vel, right_vel):
+                self.connected = False
+                self.get_logger().error("Failed to set velocity, connection lost")
+        
+        def timer_callback(self):
+            """Periodic status updates"""
+            # Check connection and try to reconnect if needed
+            if not self.connected:
+                self.connect()
+            
+            # Publish connection status
+            status_msg = Bool()
+            status_msg.data = self.connected
+            self.connection_pub.publish(status_msg)
+            
+            # Publish wheel velocities if connected
+            if self.connected:
+                try:
+                    # Get actual velocities if available
+                    left_vel = getattr(self.controller.left_axis.encoder, 'vel_estimate', 0.0)
+                    right_vel = getattr(self.controller.right_axis.encoder, 'vel_estimate', 0.0)
+                    
+                    left_msg = Float64()
+                    left_msg.data = float(left_vel)
+                    self.left_vel_pub.publish(left_msg)
+                    
+                    right_msg = Float64()
+                    right_msg.data = float(right_vel)
+                    self.right_vel_pub.publish(right_msg)
+                except Exception as e:
+                    self.get_logger().error(f"Error publishing velocities: {e}")
+                    self.connected = False
+
 class ODriveController:
     """Manages communication with the ODrive controller"""
     
@@ -194,96 +286,6 @@ class ODriveController:
             except Exception as e:
                 logger.error(f"Reconnection failed: {str(e)}")
                 return False
-
-class ODriveDiffDriveNode(Node):
-    """ROS 2 Node for ODrive differential drive control"""
-    
-    def __init__(self, left_axis=0, right_axis=1):
-        super().__init__('odrive_diff_drive')
-        self.controller = ODriveController(left_axis, right_axis)
-        self.connected = False
-        self.wheel_radius = 0.1  # Default 10cm - adjust for your robot
-        self.wheel_separation = 0.5  # Default 50cm - adjust for your robot
-        
-        # Get parameters from ROS
-        self.declare_parameter('wheel_radius', self.wheel_radius)
-        self.declare_parameter('wheel_separation', self.wheel_separation)
-        self.wheel_radius = self.get_parameter('wheel_radius').value
-        self.wheel_separation = self.get_parameter('wheel_separation').value
-        
-        # Create subscribers
-        self.cmd_vel_sub = self.create_subscription(
-            Twist, 'cmd_vel', self.cmd_vel_callback, 10)
-        
-        # Create publishers for motor status
-        self.left_vel_pub = self.create_publisher(Float64, 'left_wheel_velocity', 10)
-        self.right_vel_pub = self.create_publisher(Float64, 'right_wheel_velocity', 10)
-        self.connection_pub = self.create_publisher(Bool, 'odrive_connected', 10)
-        
-        # Timer for status updates
-        self.timer = self.create_timer(0.1, self.timer_callback)
-        
-        # Try to connect
-        self.connect()
-        
-        self.get_logger().info("ODrive differential drive node initialized")
-        
-    def connect(self):
-        """Connect to ODrive"""
-        if self.controller.connect():
-            self.connected = True
-            self.get_logger().info("Connected to ODrive")
-        else:
-            self.connected = False
-            self.get_logger().error("Failed to connect to ODrive")
-            
-    def cmd_vel_callback(self, msg):
-        """Handle cmd_vel messages"""
-        if not self.connected:
-            self.get_logger().warning("Ignoring cmd_vel: Not connected to ODrive")
-            return
-        
-        # Convert linear and angular velocity to wheel velocities
-        linear_x = msg.linear.x
-        angular_z = msg.angular.z
-        
-        # Calculate wheel velocities (differential drive kinematics)
-        left_vel = (linear_x - angular_z * self.wheel_separation / 2) / self.wheel_radius
-        right_vel = (linear_x + angular_z * self.wheel_separation / 2) / self.wheel_radius
-        
-        # Send velocities to ODrive
-        if not self.controller.set_velocity(left_vel, right_vel):
-            self.connected = False
-            self.get_logger().error("Failed to set velocity, connection lost")
-    
-    def timer_callback(self):
-        """Periodic status updates"""
-        # Check connection and try to reconnect if needed
-        if not self.connected:
-            self.connect()
-        
-        # Publish connection status
-        status_msg = Bool()
-        status_msg.data = self.connected
-        self.connection_pub.publish(status_msg)
-        
-        # Publish wheel velocities if connected
-        if self.connected:
-            try:
-                # Get actual velocities if available
-                left_vel = getattr(self.controller.left_axis.encoder, 'vel_estimate', 0.0)
-                right_vel = getattr(self.controller.right_axis.encoder, 'vel_estimate', 0.0)
-                
-                left_msg = Float64()
-                left_msg.data = float(left_vel)
-                self.left_vel_pub.publish(left_msg)
-                
-                right_msg = Float64()
-                right_msg.data = float(right_vel)
-                self.right_vel_pub.publish(right_msg)
-            except Exception as e:
-                self.get_logger().error(f"Error publishing velocities: {e}")
-                self.connected = False
 
 def main(args=None):
     # Parse command line arguments
