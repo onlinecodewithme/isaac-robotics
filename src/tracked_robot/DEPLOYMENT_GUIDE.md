@@ -109,15 +109,21 @@ The best way to handle dependency issues is to use COLCON_IGNORE files to tempor
 source /opt/ros/humble/setup.bash
 
 # Create COLCON_IGNORE files in problematic package directories
+# Skip Isaac ROS packages
 touch src/isaac_ros_common/COLCON_IGNORE
 touch src/isaac_ros_nitros/COLCON_IGNORE
 touch src/isaac_ros_visual_slam/COLCON_IGNORE
 touch src/isaac_ros_nova/COLCON_IGNORE
 touch src/isaac_ros_image_pipeline/COLCON_IGNORE
 touch src/isaac_ros_dnn_inference/COLCON_IGNORE
+
+# Skip vision packages
 touch src/vision_msgs/COLCON_IGNORE
 touch src/vision_opencv/COLCON_IGNORE
 touch src/zed-ros2-wrapper/COLCON_IGNORE
+
+# Skip simulation-related packages 
+touch src/nav2_system_tests/COLCON_IGNORE
 
 # Now build only the tracked robot packages
 colcon build --symlink-install --packages-select tracked_robot tracked_robot_msgs
@@ -129,8 +135,17 @@ Alternatively, if you prefer a simpler approach:
 
 ```bash
 # Build only specific packages without creating COLCON_IGNORE files
-COLCON_IGNORE_SKIP_UNTIL_BUILD=true colcon build --symlink-install --packages-select tracked_robot tracked_robot_msgs
+colcon build --symlink-install --packages-select tracked_robot tracked_robot_msgs
 ```
+
+If you see errors about missing Gazebo packages (like gazebo_ros_pkgs), you can safely ignore them by adding more COLCON_IGNORE files:
+
+```bash
+# Skip Gazebo-dependent packages
+touch src/nav2_system_tests/COLCON_IGNORE
+```
+
+For full simulation setup instructions, see the [Simulation Setup Guide](docs/SIMULATION_SETUP.md).
 
 This should build our tracked_robot package without requiring all the dependencies that are causing issues.
 
