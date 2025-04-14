@@ -1,6 +1,8 @@
 # ODrive Hardware Troubleshooting Guide
 
-Based on the persistent `AXIS_ERROR_MOTOR_FAILED` (0x801) error that couldn't be resolved with software, this guide focuses on checking the physical hardware setup.
+Based on the persistent `AXIS_ERROR_MOTOR_FAILED` (0x801) error that couldn't be resolved with software even with higher current settings, this guide focuses on checking the physical hardware setup.
+
+⚠️ **CRITICAL:** After attempting calibration with 25A current limit and 15A calibration current, we're still seeing the error. This almost certainly indicates a hardware issue.
 
 ## Quick Hardware Checklist
 
