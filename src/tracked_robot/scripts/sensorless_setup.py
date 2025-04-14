@@ -126,8 +126,19 @@ class SensorlessODrive:
             
             # Step 4: Configure for sensorless ramp
             # This is the key part - using sensorless ramp mode
-            self.axis.controller.config.input_mode = INPUT_MODE_SENSORLESS_RAMP
-            logger.info("Set input mode to SENSORLESS_RAMP")
+            try:
+                # First, check if the enum is available directly
+                if 'INPUT_MODE_SENSORLESS_RAMP' in dir(odrive.enums):
+                    self.axis.controller.config.input_mode = odrive.enums.INPUT_MODE_SENSORLESS_RAMP
+                    logger.info("Set input mode to SENSORLESS_RAMP using enum")
+                else:
+                    # For ODrive firmware v0.5.6, sensorless ramp mode is input_mode=5
+                    # This hardcoded value works with that specific firmware version
+                    self.axis.controller.config.input_mode = 5  # SENSORLESS_RAMP value for v0.5.6
+                    logger.info("Set input mode to SENSORLESS_RAMP (value=5)")
+            except Exception as e:
+                logger.error(f"Error setting input mode: {str(e)}")
+                return False
             
             # Step 5: Configure sensorless parameters
             # These parameters are critical for correct sensorless operation

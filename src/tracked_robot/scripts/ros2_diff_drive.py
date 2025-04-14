@@ -48,9 +48,9 @@ if HAS_ROS:
     class ODriveDiffDriveNode(Node):
         """ROS 2 Node for ODrive differential drive control"""
         
-        def __init__(self, left_axis=0, right_axis=1):
+        def __init__(self, left_axis=0, right_axis=1, sensorless_mode=False):
             super().__init__('odrive_diff_drive')
-            self.controller = ODriveController(left_axis, right_axis)
+            self.controller = ODriveController(left_axis, right_axis, sensorless_mode)
             self.connected = False
             self.wheel_radius = 0.1  # Default 10cm - adjust for your robot
             self.wheel_separation = 0.5  # Default 50cm - adjust for your robot
@@ -138,7 +138,7 @@ if HAS_ROS:
 class ODriveController:
     """Manages communication with the ODrive controller"""
     
-    def __init__(self, left_axis=0, right_axis=1):
+    def __init__(self, left_axis=0, right_axis=1, sensorless_mode=False):
         self.left_axis_num = left_axis
         self.right_axis_num = right_axis
         self.left_axis = None
@@ -146,8 +146,12 @@ class ODriveController:
         self.odrive = None
         self.connected = False
         self.lock = threading.RLock()  # For thread safety
-        self.max_current = 10.0  # Maximum current in Amps
+        self.max_current = 20.0  # Higher current for 1000W motors
         self.watchdog_timeout = 0.5  # Seconds before motor stops if no command
+        self.sensorless_mode = sensorless_mode
+        
+        if self.sensorless_mode:
+            logger.info("Initializing in SENSORLESS mode for hardware issues")
         
     def connect(self, timeout=10):
         """Connect to ODrive with timeout"""
@@ -190,17 +194,42 @@ class ODriveController:
                 if hasattr(axis.controller, 'error'):
                     axis.controller.error = 0
                 
-                # Set parameters for open loop control
+                # Set parameters for velocity control
                 axis.controller.config.control_mode = CONTROL_MODE_VELOCITY_CONTROL
                 
-                # Set current limit
+                # Set current limit - higher for 1000W motors
                 axis.motor.config.current_lim = self.max_current
+                axis.motor.config.calibration_current = self.max_current * 0.7
                 
                 # Set velocity limit (rad/s)
                 axis.controller.config.vel_limit = 10.0
                 
-                # Set input mode to pass-through
-                axis.controller.config.input_mode = INPUT_MODE_PASSTHROUGH
+                # Configure input mode based on selected mode
+                if self.sensorless_mode:
+                    logger.info(f"Configuring {name} motor for SENSORLESS mode")
+                    try:
+                        # For ODrive firmware v0.5.6, sensorless ramp mode is input_mode=5
+                        axis.controller.config.input_mode = 5  # SENSORLESS_RAMP
+                        logger.info(f"Set {name} motor to sensorless ramp mode (value=5)")
+                        
+                        # Configure sensorless parameters
+                        axis.controller.config.vel_ramp_rate = 1.0  # 1 turn/s²
+                        logger.info(f"Set velocity ramp rate to 1.0 turn/s²")
+                        
+                        # Set flux parameters if available
+                        if hasattr(axis, 'sensorless_estimator') and \
+                           hasattr(axis.sensorless_estimator.config, 'pm_flux_linkage'):
+                            axis.sensorless_estimator.config.pm_flux_linkage = 5.51e-3
+                            logger.info(f"Set PM flux linkage to 5.51e-3 for {name} motor")
+                    except Exception as e:
+                        logger.error(f"Error configuring sensorless mode: {str(e)}")
+                        # Fall back to regular mode
+                        axis.controller.config.input_mode = INPUT_MODE_PASSTHROUGH
+                        logger.info(f"Falling back to PASSTHROUGH mode for {name} motor")
+                else:
+                    # Regular mode with encoder feedback
+                    axis.controller.config.input_mode = INPUT_MODE_PASSTHROUGH
+                    logger.info(f"Set {name} motor to normal passthrough mode")
                 
                 # Set up watchdog
                 if hasattr(axis.config, 'enable_watchdog'):
@@ -385,12 +414,13 @@ def main(args=None):
     parser.add_argument('--left_axis', type=int, default=0, help='Left motor axis (0 or 1)')
     parser.add_argument('--right_axis', type=int, default=1, help='Right motor axis (0 or 1)')
     parser.add_argument('--standalone', action='store_true', help='Run in standalone mode without ROS')
+    parser.add_argument('--sensorless', action='store_true', help='Use sensorless mode (for hardware issues)')
     
     args, remaining = parser.parse_known_args()
     
     if args.standalone or not HAS_ROS:
         # Standalone mode - manual velocity control
-        controller = ODriveController(args.left_axis, args.right_axis)
+        controller = ODriveController(args.left_axis, args.right_axis, args.sensorless)
         if not controller.connect():
             print("Failed to connect to ODrive. Exiting.")
             sys.exit(1)
@@ -447,7 +477,7 @@ def main(args=None):
     else:
         # ROS 2 mode
         rclpy.init(args=args)
-        node = ODriveDiffDriveNode(args.left_axis, args.right_axis)
+        node = ODriveDiffDriveNode(args.left_axis, args.right_axis, args.sensorless)
         
         try:
             rclpy.spin(node)
