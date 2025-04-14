@@ -56,7 +56,7 @@ def run_command(command):
         return False
 
 def set_config_step(axis_num, config_name, value, type_convert=None):
-    """Set a configuration value in a separate process"""
+    """Set a configuration value in a separate process without saving configuration"""
     # Convert value to appropriate string representation
     if type_convert == "float":
         value_str = f"{float(value)}"
@@ -77,12 +77,30 @@ try:
     axis = getattr(odrv, f"axis{axis_num}")
     {config_name} = {value_str}
     print(f"Successfully set {config_name} = {value_str}")
-    time.sleep(0.5)  # Brief pause to let it register
-    odrv.save_configuration()
-    print("Saved configuration")
+    # No save_configuration() here to avoid device reset
 except Exception as e:
     print(f"Error: {{e}}")
-    exit(1)
+    # Non-critical error, don't exit
+"""
+    return run_command(command)
+
+def save_configuration(axis_num):
+    """Save the configuration in a separate process"""
+    command = f"""
+import odrive
+import time
+from odrive.enums import *
+try:
+    odrv = odrive.find_any(timeout=10)
+    print("Saving ODrive configuration...")
+    odrv.save_configuration()
+    print("Configuration saved. Device may reset.")
+except Exception as e:
+    # The device often resets here, which is normal
+    if "object disappeared" in str(e).lower():
+        print("Device reset as expected after saving configuration")
+    else:
+        print(f"Error: {{e}}")
 """
     return run_command(command)
 
@@ -284,6 +302,14 @@ def one_shot_calibration(axis_num):
     # Set manual motor parameters (can help with calibration)
     set_config_step(axis_num, f"axis.motor.config.phase_resistance", 0.15, "float")
     set_config_step(axis_num, f"axis.motor.config.phase_inductance", 0.00005, "float")
+    
+    # Save all configuration at once
+    print("\nSaving configuration (device will likely reset)...")
+    save_configuration(axis_num)
+    
+    # Wait for device to reset and come back online
+    print("Waiting for device to reset...")
+    time.sleep(5.0)
     
     print("\n=== STEP 2: Motor Calibration ===")
     print("Starting motor calibration (resistance measurement)...")
