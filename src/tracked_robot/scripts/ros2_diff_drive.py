@@ -213,7 +213,43 @@ class ODriveController:
                 logger.error(f"Error configuring {name} motor: {str(e)}")
                 return False
     
-    def set_velocity(self, left_vel, right_vel, enter_control_mode=True):
+    def force_encoder_ready(self, axis):
+        """Force encoder ready flags - needed to operate motors without complete calibration"""
+        try:
+            # Set pre_calibrated if available
+            if hasattr(axis.encoder.config, 'pre_calibrated'):
+                axis.encoder.config.pre_calibrated = True
+                logger.info("Set encoder.config.pre_calibrated")
+                
+            # Set hall_polarity_calibrated if available
+            if hasattr(axis.encoder.config, 'hall_polarity_calibrated'):
+                axis.encoder.config.hall_polarity_calibrated = True
+                logger.info("Set encoder.config.hall_polarity_calibrated")
+                
+            # Manually set offset to a reasonable value if available
+            if hasattr(axis.encoder.config, 'hall_offset'):
+                axis.encoder.config.hall_offset = 0
+                logger.info("Set encoder.config.hall_offset to 0")
+                
+            # Try to save configuration, but handle device reset
+            try:
+                self.odrive.save_configuration()
+                logger.info("Saved configuration")
+                time.sleep(1.0)  # Wait for changes to apply
+            except Exception as e:
+                if "object disappeared" in str(e).lower():
+                    logger.info("Device reset after saving - this is normal")
+                    # Need to reconnect
+                    return None
+                else:
+                    logger.error(f"Error saving configuration: {str(e)}")
+                    
+            return True
+        except Exception as e:
+            logger.error(f"Error forcing encoder ready: {str(e)}")
+            return False
+    
+    def set_velocity(self, left_vel, right_vel, enter_control_mode=True, force_mode=False):
         """Set velocity for both motors"""
         with self.lock:
             if not self.connected:
@@ -223,13 +259,69 @@ class ODriveController:
             try:
                 # Enter closed loop control if needed
                 if enter_control_mode:
-                    if self.left_axis.current_state != AXIS_STATE_CLOSED_LOOP_CONTROL:
-                        self.left_axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
-                    if self.right_axis.current_state != AXIS_STATE_CLOSED_LOOP_CONTROL:
-                        self.right_axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
-                    time.sleep(0.01)  # Brief pause for state change
+                    # If force mode, clear errors and ensure encoder is "ready"
+                    if force_mode:
+                        logger.info("Using FORCE MODE - bypassing encoder checks")
+                        
+                        # Clear any errors
+                        if hasattr(self.left_axis, 'error'):
+                            self.left_axis.error = 0
+                        if hasattr(self.left_axis.motor, 'error'):
+                            self.left_axis.motor.error = 0
+                        if hasattr(self.left_axis.encoder, 'error'):
+                            self.left_axis.encoder.error = 0
+                        if hasattr(self.left_axis.controller, 'error'):
+                            self.left_axis.controller.error = 0
+                            
+                        if hasattr(self.right_axis, 'error'):
+                            self.right_axis.error = 0
+                        if hasattr(self.right_axis.motor, 'error'):
+                            self.right_axis.motor.error = 0
+                        if hasattr(self.right_axis.encoder, 'error'):
+                            self.right_axis.encoder.error = 0
+                        if hasattr(self.right_axis.controller, 'error'):
+                            self.right_axis.controller.error = 0
+                            
+                        # Force encoder ready on both axes
+                        self.force_encoder_ready(self.left_axis)
+                        self.force_encoder_ready(self.right_axis)
+                        
+                        # Reconnect if needed
+                        self.connect(timeout=5)
+                    
+                    logger.info("Entering closed loop control...")
+                    
+                    # Try to enter closed loop control for both motors
+                    try:
+                        # Left motor
+                        motor_state = self.left_axis.current_state
+                        logger.info(f"Left motor state: {motor_state}")
+                        
+                        if self.left_axis.current_state != AXIS_STATE_CLOSED_LOOP_CONTROL:
+                            self.left_axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+                            logger.info("Requested CLOSED_LOOP_CONTROL for left motor")
+                            
+                        if self.right_axis.current_state != AXIS_STATE_CLOSED_LOOP_CONTROL:
+                            self.right_axis.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+                            logger.info("Requested CLOSED_LOOP_CONTROL for right motor")
+                            
+                    except Exception as e:
+                        logger.error(f"Error entering closed loop control: {str(e)}")
+                        
+                    # Wait a bit longer for state transition
+                    time.sleep(0.5)
+                    
+                    # Check if we succeeded
+                    try:
+                        logger.info(f"Left motor: state={self.left_axis.current_state}, " +
+                                    f"error={self.left_axis.error if hasattr(self.left_axis, 'error') else 'N/A'}")
+                        logger.info(f"Right motor: state={self.right_axis.current_state}, " +
+                                    f"error={self.right_axis.error if hasattr(self.right_axis, 'error') else 'N/A'}")
+                    except Exception as e:
+                        logger.error(f"Error checking motor state: {str(e)}")
                 
                 # Set velocities
+                logger.info(f"Setting velocities: Left={left_vel:.2f}, Right={right_vel:.2f}")
                 self.left_axis.controller.input_vel = float(left_vel)
                 self.right_axis.controller.input_vel = float(right_vel)
                 
@@ -337,13 +429,14 @@ def main(args=None):
                     right_vel -= 1.0
                 
                 print(f"Setting velocity: Left={left_vel:.2f}, Right={right_vel:.2f}")
-                controller.set_velocity(left_vel, right_vel, False)
+                # Try with force mode to bypass encoder calibration requirements
+                controller.set_velocity(left_vel, right_vel, True, force_mode=True)
                 
                 # Wait a moment then stop if not continuous
-                time.sleep(0.5)
+                time.sleep(1.0)  # Longer time to observe movement
                 if not ('c' in cmd):  # 'c' for continuous
                     print("Stopping...")
-                    controller.set_velocity(0, 0, False)
+                    controller.set_velocity(0, 0, True, force_mode=True)
         
         except KeyboardInterrupt:
             print("\nProgram terminated by user")
